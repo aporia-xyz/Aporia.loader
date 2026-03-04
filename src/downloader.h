@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <curl/curl.h>
 
 struct Mod {
     std::string name;
@@ -15,6 +16,5 @@ public:
     static bool fileExists(const std::string& path);
     
 private:
-    static size_t writeCallback(void* contents, size_t size, size_t nmemb, void* userp);
-    static int progressCallback(void* clientp, double dltotal, double dlnow, double ultotal, double ulnow);
+    static int xferInfoCallback(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow);
 };

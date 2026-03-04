@@ -107,13 +107,13 @@ void setupGameFiles(const Config& config) {
 
 std::vector<Mod> getMods() {
     return {
-        {"Iris Shaders", "https://cdn.modrinth.com/data/YL57xq9U/versions/JS9deRtw/iris-1.10.6%2B1.21.11-fabric.jar", true},
-        {"Sodium", "https://cdn.modrinth.com/data/AANobbMI/versions/ZPWbiWXz/sodium-fabric-0.8.6%2Bmc1.21.11.jar", true},
-        {"Mod Menu", "https://cdn.modrinth.com/data/mOgUt4GM/versions/17.0.0-beta.2/modmenu-17.0.0-beta.2.jar", true},
-        {"Sodium Extra", "https://cdn.modrinth.com/data/PtjYWJkn/versions/mc1.21.11-0.8.3%2Bfabric/sodium-extra-0.8.3%2Bmc1.21.11.jar", true},
-        {"3D Skin Layers", "https://cdn.modrinth.com/data/zV5r3pPn/versions/JS9deRtw/3dskinlayers-fabric-1.7.7-mc1.21.11.jar", true},
-        {"Sound Physics Remastered", "https://cdn.modrinth.com/data/qyVF9oeo/versions/fabric-1.21.11-1.5.1/sound-physics-remastered-fabric-1.21.11-1.5.1.jar", true},
-        {"Cloth Config", "https://cdn.modrinth.com/data/9s6osm5g/versions/21.11.153%2Bfabric/cloth-config-21.11.153-fabric.jar", true}
+        // {"Iris Shaders", "https://cdn.modrinth.com/data/YL57xq9U/versions/TSXvi2yD/iris-fabric-1.10.6%2Bmc1.21.11.jar", true},
+        // {"Sodium", "https://cdn.modrinth.com/data/AANobbMI/versions/ZPWbiWXz/sodium-fabric-0.8.6%2Bmc1.21.11.jar", true},
+        {"Mod Menu", "https://cdn.modrinth.com/data/mOgUt4GM/versions/JWQVh32x/modmenu-17.0.0-beta.2.jar", true},
+        // {"Sodium Extra", "https://cdn.modrinth.com/data/PtjYWJkn/versions/yqY1efrC/sodium-extra-fabric-0.8.3%2Bmc1.21.11.jar", true},
+        {"3D Skin Layers", "https://cdn.modrinth.com/data/zV5r3pPn/versions/JS9deRtw/skinlayers3d-fabric-1.10.2-mc1.21.11.jar", true},
+        {"Sound Physics Remastered", "https://cdn.modrinth.com/data/qyVF9oeo/versions/pfqxi9qs/sound-physics-remastered-fabric-1.21.11-1.5.1.jar", true},
+        {"Cloth Config", "https://cdn.modrinth.com/data/9s6osm5g/versions/xuX40TN5/cloth-config-21.11.153-fabric.jar", true}
     };
 }
 
@@ -162,10 +162,12 @@ void launchMinecraft(const Config& config) {
     // Оборачиваем в cmd /k, чтобы видеть лог, если моды битые!
     cmd << "cmd /k \"\"" << javaCmd << "\""; 
     cmd << " -Xmx" << config.ramMB << "M";
+    if (config.devMode) cmd << " -noverify";
     cmd << " net.fabricmc.loader.impl.launch.knot.KnotClient";
     cmd << " --gameDir \"" << config.installPath << "\"";
     cmd << " --version \"Fabric 1.21.11\"";
     cmd << " --assetsDir \"" << config.installPath << "\\assets\"";
+    cmd << " --assetIndex 29";
     cmd << " --username " << config.username << "\"";
     
     std::cout << Utils::Color::CYAN << "🚀 Запуск через CLASSPATH env..." << Utils::Color::RESET << std::endl;
