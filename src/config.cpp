@@ -1,3 +1,8 @@
+/**
+ * @file config.cpp
+ * @brief Реализация модуля конфигурации
+ */
+
 #include "config.h"
 #include "utils.h"
 #include <iostream>

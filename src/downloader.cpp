@@ -1,23 +1,22 @@
+/**
+ * @file downloader.cpp
+ * @brief Реализация модуля загрузки файлов
+ */
+
 #include "downloader.h"
 #include "utils.h"
 #include <curl/curl.h>
 #include <fstream>
 #include <iostream>
 #include <filesystem>
+#include <thread>
+#include <queue>
+#include <mutex>
+#include <condition_variable>
 
 namespace fs = std::filesystem;
 
 int Downloader::xferInfoCallback(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow) {
-    if (dltotal > 0) {
-        int percent = (int)((dlnow * 100) / dltotal);
-        std::cout << "\r" << Utils::Color::CYAN << "Загрузка: [";
-        int bars = percent / 2;
-        for (int i = 0; i < 50; i++) {
-            if (i < bars) std::cout << "█";
-            else std::cout << "░";
-        }
-        std::cout << "] " << percent << "%" << Utils::Color::RESET << std::flush;
-    }
     return 0;
 }
 
@@ -44,7 +43,6 @@ bool Downloader::download(const std::string& url, const std::string& output) {
     fclose(fp);
     curl_easy_cleanup(curl);
     
-    std::cout << "\n";
     return res == CURLE_OK;
 }
 
@@ -61,10 +59,8 @@ void Downloader::downloadMods(const std::string& modsPath, const std::vector<Mod
     for (const auto& mod : mods) {
         if (!mod.selected) continue;
         
-        // Берем имя файла из URL
         std::string rawFilename = mod.url.substr(mod.url.find_last_of('/') + 1);
         
-        // ДЕКОДИРУЕМ %2B в + и прочее
         int outLength;
         char* decoded = curl_easy_unescape(curl, rawFilename.c_str(), 0, &outLength);
         std::string filename(decoded, outLength);
@@ -86,4 +82,80 @@ void Downloader::downloadMods(const std::string& modsPath, const std::vector<Mod
     }
     
     curl_easy_cleanup(curl);
+}
+
+void Downloader::downloadParallel(const std::vector<DownloadTask>& tasks, int numThreads, DownloadStats& stats) {
+    std::queue<DownloadTask> taskQueue;
+    std::mutex queueMutex;
+    std::condition_variable cv;
+    bool done = false;
+    
+    for (const auto& task : tasks) {
+        taskQueue.push(task);
+    }
+    
+    auto worker = [&]() {
+        CURL* curl = curl_easy_init();
+        if (!curl) return;
+        
+        while (true) {
+            DownloadTask task;
+            
+            {
+                std::unique_lock<std::mutex> lock(queueMutex);
+                if (taskQueue.empty()) {
+                    break;
+                }
+                task = taskQueue.front();
+                taskQueue.pop();
+            }
+            
+            if (fs::exists(task.output)) {
+                stats.skipped++;
+                stats.completed++;
+                continue;
+            }
+            
+            FILE* fp = fopen(task.output.c_str(), "wb");
+            if (!fp) {
+                stats.failed++;
+                stats.completed++;
+                continue;
+            }
+            
+            curl_easy_setopt(curl, CURLOPT_URL, task.url.c_str());
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
+            curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+            curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
+            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+            curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+            
+            CURLcode res = curl_easy_perform(curl);
+            
+            long fileSize = 0;
+            fseek(fp, 0, SEEK_END);
+            fileSize = ftell(fp);
+            fclose(fp);
+            
+            if (res == CURLE_OK && fileSize > 0) {
+                stats.bytesDownloaded += fileSize;
+            } else {
+                fs::remove(task.output);
+                stats.failed++;
+            }
+            
+            stats.completed++;
+        }
+        
+        curl_easy_cleanup(curl);
+    };
+    
+    std::vector<std::thread> threads;
+    for (int i = 0; i < numThreads; i++) {
+        threads.emplace_back(worker);
+    }
+    
+    for (auto& t : threads) {
+        t.join();
+    }
 }

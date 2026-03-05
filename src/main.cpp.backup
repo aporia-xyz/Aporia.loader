@@ -1,8 +1,3 @@
-/**
- * @file main.cpp
- * @brief Aporia Minecraft Loader - главный файл лаунчера
- */
-
 #include "utils.h"
 #include "config.h"
 #include "downloader.h"
@@ -12,18 +7,13 @@
 #include <vector>
 #include <sstream>
 #include <fstream>
-#include <thread>
-#include <chrono>
-#include <iomanip>
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
-/**
- * @brief Копирует директорию рекурсивно
- * @param src Исходная директория
- * @param dst Целевая директория
- */
+// Uncomment after running embed_resources.py
+// #include "embedded_resources.h"
+
 void copyDirectory(const fs::path& src, const fs::path& dst) {
     if (!fs::exists(src)) return;
     if (fs::exists(dst)) {
@@ -44,10 +34,6 @@ void copyDirectory(const fs::path& src, const fs::path& dst) {
     }
 }
 
-/**
- * @brief Ищет установленную Java в системе
- * @return Путь к java.exe или "java" если не найдена
- */
 std::string findJava() {
     std::vector<std::string> javaPaths = {
         "C:\\Program Files\\Java\\jdk-26\\bin\\java.exe",
@@ -65,10 +51,6 @@ std::string findJava() {
     return "java";
 }
 
-/**
- * @brief Определяет имя ОС для Minecraft
- * @return "windows", "osx" или "linux"
- */
 std::string getOsName() {
 #ifdef _WIN32
     return "windows";
@@ -79,18 +61,13 @@ std::string getOsName() {
 #endif
 }
 
-/**
- * @brief Конвертирует Maven координаты в URL
- * @param maven Maven координаты (group:artifact:version)
- * @param classifier Классификатор (например "natives-windows")
- * @param baseUrl Базовый URL репозитория
- * @return Полный URL для скачивания
- */
-std::string mavenToUrl(const std::string& maven, const std::string& classifier, const std::string& baseUrl) {
+std::string mavenToUrl(const std::string& maven, const std::string& classifier, const std::string& baseUrl = "https://libraries.minecraft.net/") {
+    // Убираем classifier из maven если он там есть
     std::string cleanMaven = maven;
     size_t lastColon = maven.rfind(':');
     size_t secondColon = maven.find(':', maven.find(':') + 1);
     
+    // Если есть третье двоеточие - это classifier в имени, убираем его
     if (lastColon != secondColon && lastColon != std::string::npos) {
         cleanMaven = maven.substr(0, lastColon);
     }
@@ -104,6 +81,7 @@ std::string mavenToUrl(const std::string& maven, const std::string& classifier, 
     std::string artifact = cleanMaven.substr(colon1 + 1, colon2 - colon1 - 1);
     std::string version = cleanMaven.substr(colon2 + 1);
     
+    // Заменяем . на /
     for (char& c : group) {
         if (c == '.') c = '/';
     }
@@ -118,10 +96,12 @@ std::string mavenToUrl(const std::string& maven, const std::string& classifier, 
 }
 
 std::string mavenToPath(const std::string& maven, const std::string& classifier, const std::string& basePath) {
+    // Убираем classifier из maven если он там есть
     std::string cleanMaven = maven;
     size_t lastColon = maven.rfind(':');
     size_t secondColon = maven.find(':', maven.find(':') + 1);
     
+    // Если есть третье двоеточие - это classifier в имени, убираем его
     if (lastColon != secondColon && lastColon != std::string::npos) {
         cleanMaven = maven.substr(0, lastColon);
     }
@@ -154,6 +134,7 @@ void downloadAllResources(const Config& config) {
         return;
     }
     
+    // Читаем JSON
     std::ifstream file(jsonPath);
     json versionJson;
     file >> versionJson;
@@ -161,15 +142,62 @@ void downloadAllResources(const Config& config) {
     std::string libsPath = config.installPath + "/libraries";
     std::string osName = getOsName();
     
-    std::vector<DownloadTask> allTasks;
+    // Подсчитываем либы
+    int totalLibs = 0;
+    if (versionJson.contains("libraries")) {
+        for (const auto& lib : versionJson["libraries"]) {
+            if (!lib.contains("name")) continue;
+            
+            if (lib.contains("rules")) {
+                bool allowed = false;
+                for (const auto& rule : lib["rules"]) {
+                    if (rule["action"] == "allow") {
+                        if (rule.contains("os")) {
+                            if (rule["os"]["name"] == osName) allowed = true;
+                        } else {
+                            allowed = true;
+                        }
+                    }
+                }
+                if (!allowed) continue;
+            }
+            
+            totalLibs++;
+            if (lib.contains("natives") && lib["natives"].contains(osName)) {
+                totalLibs++;
+            }
+        }
+    }
     
+    // Подсчитываем ассеты
+    int totalAssets = 0;
+    if (versionJson.contains("assetIndex")) {
+        auto assetIndex = versionJson["assetIndex"];
+        std::string indexPath = config.installPath + "/assets/indexes/" + std::string(assetIndex["id"]) + ".json";
+        
+        if (fs::exists(indexPath)) {
+            std::ifstream indexFile(indexPath);
+            json indexJson;
+            indexFile >> indexJson;
+            if (indexJson.contains("objects")) {
+                totalAssets = indexJson["objects"].size();
+            }
+        }
+    }
+    
+    int totalFiles = totalLibs + totalAssets;
+    std::cout << Utils::Color::YELLOW << "\n📦 Всего файлов: " << totalFiles << " (либы: " << totalLibs << ", ассеты: " << totalAssets << ")\n" << Utils::Color::RESET;
+    
+    int current = 0;
+    int downloaded = 0;
+    int skipped = 0;
+    
+    // Качаем либы
     if (versionJson.contains("libraries")) {
         for (const auto& lib : versionJson["libraries"]) {
             if (!lib.contains("name")) continue;
             
             std::string name = lib["name"];
-            
-            if (name.find("ru.legacylauncher") != std::string::npos) continue;
             
             if (lib.contains("rules")) {
                 bool allowed = false;
@@ -188,22 +216,55 @@ void downloadAllResources(const Config& config) {
             std::string baseUrl = "https://libraries.minecraft.net/";
             if (lib.contains("url")) baseUrl = lib["url"];
             
-            std::string classifier = "";
-            std::string cleanName = name;
-            size_t colonPos = name.rfind(':');
-            size_t secondColonPos = name.find(':', name.find(':') + 1);
-            if (colonPos != secondColonPos && colonPos != std::string::npos) {
-                classifier = name.substr(colonPos + 1);
-                cleanName = name.substr(0, colonPos);
+            std::string url = mavenToUrl(name, "", baseUrl);
+            std::string localPath = mavenToPath(name, "", libsPath);
+            
+            current++;
+            if (fs::exists(localPath)) {
+                skipped++;
+            } else {
+                fs::create_directories(fs::path(localPath).parent_path());
+                if (Downloader::download(url, localPath)) downloaded++;
             }
             
-            std::string url = mavenToUrl(cleanName, classifier, baseUrl);
-            std::string localPath = mavenToPath(cleanName, classifier, libsPath);
-            fs::create_directories(fs::path(localPath).parent_path());
-            allTasks.push_back({url, localPath});
+            // Прогресс
+            int percent = (current * 100) / totalFiles;
+            std::cout << "\r" << Utils::Color::CYAN << "[" << current << "/" << totalFiles << "] ";
+            int bars = (current * 50) / totalFiles;
+            for (int i = 0; i < 50; i++) {
+                std::cout << (i < bars ? "█" : "░");
+            }
+            std::cout << " " << percent << "%" << Utils::Color::RESET << std::flush;
+            
+            // Natives
+            if (lib.contains("natives") && lib["natives"].contains(osName)) {
+                std::string classifier = lib["natives"][osName];
+                size_t pos = classifier.find("${arch}");
+                if (pos != std::string::npos) classifier.replace(pos, 7, "x64");
+                
+                std::string nativeUrl = mavenToUrl(name, classifier, baseUrl);
+                std::string nativePath = mavenToPath(name, classifier, libsPath);
+                
+                current++;
+                if (fs::exists(nativePath)) {
+                    skipped++;
+                } else {
+                    fs::create_directories(fs::path(nativePath).parent_path());
+                    if (Downloader::download(nativeUrl, nativePath)) downloaded++;
+                }
+                
+                percent = (current * 100) / totalFiles;
+                std::cout << "\r" << Utils::Color::CYAN << "[" << current << "/" << totalFiles << "] ";
+                bars = (current * 50) / totalFiles;
+                for (int i = 0; i < 50; i++) {
+                    std::cout << (i < bars ? "█" : "░");
+                }
+                std::cout << " " << percent << "%" << Utils::Color::RESET << std::flush;
+            }
         }
     }
     
+    // Качаем ассеты
     if (versionJson.contains("assetIndex")) {
         auto assetIndex = versionJson["assetIndex"];
         std::string assetIndexUrl = assetIndex["url"];
@@ -224,55 +285,181 @@ void downloadAllResources(const Config& config) {
                 std::string hash = value["hash"];
                 std::string subdir = hash.substr(0, 2);
                 std::string objectPath = config.installPath + "/assets/objects/" + subdir + "/" + hash;
-                fs::create_directories(fs::path(objectPath).parent_path());
                 
-                std::string url = "https://resources.download.minecraft.net/" + subdir + "/" + hash;
-                allTasks.push_back({url, objectPath});
+                current++;
+                if (fs::exists(objectPath)) {
+                    skipped++;
+                } else {
+                    fs::create_directories(fs::path(objectPath).parent_path());
+                    std::string url = "https://resources.download.minecraft.net/" + subdir + "/" + hash;
+                    if (Downloader::download(url, objectPath)) downloaded++;
+                }
+                
+                if (current % 10 == 0 || current == totalFiles) {
+                    int percent = (current * 100) / totalFiles;
+                    std::cout << "\r" << Utils::Color::CYAN << "[" << current << "/" << totalFiles << "] ";
+                    int bars = (current * 50) / totalFiles;
+                    for (int i = 0; i < 50; i++) {
+                        std::cout << (i < bars ? "█" : "░");
+                    }
+                    std::cout << " " << percent << "%" << Utils::Color::RESET << std::flush;
+                }
             }
         }
     }
     
-    int totalFiles = allTasks.size();
-    std::cout << Utils::Color::YELLOW << "\n📦 Всего файлов: " << totalFiles << "\n" << Utils::Color::RESET;
+    std::cout << "\n" << Utils::Color::GREEN << "✓ Загружено: " << downloaded << ", пропущено: " << skipped << "\n" << Utils::Color::RESET;
+}
+
+void setupGameFiles(const Config& config) {
     
-    DownloadStats stats;
-    auto startTime = std::chrono::steady_clock::now();
-    
-    std::thread downloadThread([&]() {
-        Downloader::downloadParallel(allTasks, 8, stats);
-    });
-    
-    while (stats.completed < totalFiles) {
-        auto now = std::chrono::steady_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count();
-        
-        int current = stats.completed.load();
-        int percent = (current * 100) / totalFiles;
-        
-        double speed = elapsed > 0 ? (stats.bytesDownloaded.load() / 1024.0 / 1024.0) / elapsed : 0;
-        
-        int remaining = 0;
-        if (current > 0 && elapsed > 0) {
-            double avgTimePerFile = (double)elapsed / current;
-            remaining = (int)(avgTimePerFile * (totalFiles - current));
-        }
-        
-        std::cout << "\r" << Utils::Color::CYAN << "[" << current << "/" << totalFiles << "] ";
-        int bars = (current * 50) / totalFiles;
-        for (int i = 0; i < 50; i++) {
-            std::cout << (i < bars ? "█" : "░");
-        }
-        std::cout << " " << percent << "% | " 
-                  << std::fixed << std::setprecision(2) << speed << " MB/s | "
-                  << remaining << "s" << Utils::Color::RESET << std::flush;
-        
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    if (!fs::exists(jsonPath)) {
+        std::cout << Utils::Color::RED << "✗ JSON не найден: " << jsonPath << "\n" << Utils::Color::RESET;
+        return;
     }
     
-    downloadThread.join();
+    // Читаем и парсим JSON
+    std::ifstream file(jsonPath);
+    json versionJson;
+    file >> versionJson;
     
-    std::cout << "\n" << Utils::Color::GREEN << "✓ Загружено: " << (totalFiles - stats.skipped.load()) 
-              << ", пропущено: " << stats.skipped.load() << "\n" << Utils::Color::RESET;
+    if (!versionJson.contains("libraries")) {
+        std::cout << Utils::Color::RED << "✗ Секция libraries не найдена\n" << Utils::Color::RESET;
+        return;
+    }
+    
+    auto libraries = versionJson["libraries"];
+    std::string libsPath = config.installPath + "/libraries";
+    std::string osName = getOsName();
+    
+    // Подсчитываем сколько нужно скачать
+    int totalLibs = 0;
+    for (const auto& lib : libraries) {
+        if (!lib.contains("name")) continue;
+        
+        // Проверяем rules (ОС-специфичные либы)
+        if (lib.contains("rules")) {
+            bool allowed = false;
+            for (const auto& rule : lib["rules"]) {
+                if (rule["action"] == "allow") {
+                    if (rule.contains("os")) {
+                        if (rule["os"]["name"] == osName) {
+                            allowed = true;
+                        }
+                    } else {
+                        allowed = true;
+                    }
+                }
+            }
+            if (!allowed) continue;
+        }
+        
+        totalLibs++;
+        
+        // Natives
+        if (lib.contains("natives") && lib["natives"].contains(osName)) {
+            totalLibs++;
+        }
+    }
+    
+    std::cout << Utils::Color::YELLOW << "\n📚 Библиотек для загрузки: " << totalLibs << "\n" << Utils::Color::RESET;
+    
+    int current = 0;
+    int downloaded = 0;
+    int skipped = 0;
+    
+    for (const auto& lib : libraries) {
+        if (!lib.contains("name")) continue;
+        
+        std::string name = lib["name"];
+        
+        // Проверяем rules
+        if (lib.contains("rules")) {
+            bool allowed = false;
+            for (const auto& rule : lib["rules"]) {
+                if (rule["action"] == "allow") {
+                    if (rule.contains("os")) {
+                        if (rule["os"]["name"] == osName) {
+                            allowed = true;
+                        }
+                    } else {
+                        allowed = true;
+                    }
+                }
+            }
+            if (!allowed) continue;
+        }
+        
+        std::string baseUrl = "https://libraries.minecraft.net/";
+        if (lib.contains("url")) {
+            baseUrl = lib["url"];
+        }
+        
+        // Основная либа
+        std::string url = mavenToUrl(name, "", baseUrl);
+        std::string localPath = mavenToPath(name, "", libsPath);
+        
+        current++;
+        int percent = (current * 100) / totalLibs;
+        
+        if (fs::exists(localPath)) {
+            skipped++;
+        } else {
+            fs::create_directories(fs::path(localPath).parent_path());
+            
+            if (Downloader::download(url, localPath)) {
+                downloaded++;
+            }
+        }
+        
+        // Обновляем прогресс
+        std::cout << "\r" << Utils::Color::CYAN << "[" << current << "/" << totalLibs << "] ";
+        int bars = (current * 50) / totalLibs;
+        for (int i = 0; i < 50; i++) {
+            if (i < bars) std::cout << "█";
+            else std::cout << "░";
+        }
+        std::cout << " " << percent << "%" << Utils::Color::RESET << std::flush;
+        
+        // Natives
+        if (lib.contains("natives") && lib["natives"].contains(osName)) {
+            std::string classifier = lib["natives"][osName];
+            
+            // Заменяем ${arch} на x64
+            size_t pos = classifier.find("${arch}");
+            if (pos != std::string::npos) {
+                classifier.replace(pos, 7, "x64");
+            }
+            
+            std::string nativeUrl = mavenToUrl(name, classifier, baseUrl);
+            std::string nativePath = mavenToPath(name, classifier, libsPath);
+            
+            current++;
+            percent = (current * 100) / totalLibs;
+            
+            if (fs::exists(nativePath)) {
+                skipped++;
+            } else {
+                fs::create_directories(fs::path(nativePath).parent_path());
+                
+                if (Downloader::download(nativeUrl, nativePath)) {
+                    downloaded++;
+                }
+            }
+            
+            // Обновляем прогресс
+            percent = (current * 100) / totalLibs;
+            std::cout << "\r" << Utils::Color::CYAN << "[" << current << "/" << totalLibs << "] ";
+            bars = (current * 50) / totalLibs;
+            for (int i = 0; i < 50; i++) {
+                if (i < bars) std::cout << "█";
+                else std::cout << "░";
+            }
+            std::cout << " " << percent << "%" << Utils::Color::RESET << std::flush;
+        }
+    }
+    
+    std::cout << "\n" << Utils::Color::GREEN << "✓ Библиотеки: загружено " << downloaded << ", пропущено " << skipped << "\n" << Utils::Color::RESET;
 }
 
 void downloadAssetsFromJson(const Config& config) {
@@ -399,7 +586,10 @@ void setupGameFiles(const Config& config) {
 
 std::vector<Mod> getMods() {
     return {
+        // {"Iris Shaders", "https://cdn.modrinth.com/data/YL57xq9U/versions/TSXvi2yD/iris-fabric-1.10.6%2Bmc1.21.11.jar", true},
+        // {"Sodium", "https://cdn.modrinth.com/data/AANobbMI/versions/ZPWbiWXz/sodium-fabric-0.8.6%2Bmc1.21.11.jar", true},
         {"Mod Menu", "https://cdn.modrinth.com/data/mOgUt4GM/versions/JWQVh32x/modmenu-17.0.0-beta.2.jar", true},
+        // {"Sodium Extra", "https://cdn.modrinth.com/data/PtjYWJkn/versions/yqY1efrC/sodium-extra-fabric-0.8.3%2Bmc1.21.11.jar", true},
         {"3D Skin Layers", "https://cdn.modrinth.com/data/zV5r3pPn/versions/JS9deRtw/skinlayers3d-fabric-1.10.2-mc1.21.11.jar", true},
         {"Sound Physics Remastered", "https://cdn.modrinth.com/data/qyVF9oeo/versions/pfqxi9qs/sound-physics-remastered-fabric-1.21.11-1.5.1.jar", true},
         {"Cloth Config", "https://cdn.modrinth.com/data/9s6osm5g/versions/xuX40TN5/cloth-config-21.11.153-fabric.jar", true}
@@ -429,38 +619,15 @@ void selectMods(std::vector<Mod>& mods) {
     }
 }
 
-void extractNatives(const Config& config) {
-    std::string libsPath = config.installPath + "/libraries";
-    std::string nativesDir = config.installPath + "/versions/Fabric 1.21.11/natives";
-    
-    fs::create_directories(nativesDir);
-    
-    std::cout << Utils::Color::YELLOW << "📦 Распаковка natives...\n" << Utils::Color::RESET;
-    
-    if (fs::exists(libsPath)) {
-        for (const auto& entry : fs::recursive_directory_iterator(libsPath)) {
-            if (entry.is_regular_file() && entry.path().extension() == ".jar") {
-                std::string filename = entry.path().filename().string();
-                if (filename.find("natives-windows") != std::string::npos) {
-                    std::string cmd = "powershell -Command \"Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('" + entry.path().string() + "', '" + nativesDir + "')\" 2>nul";
-                    system(cmd.c_str());
-                }
-            }
-        }
-    }
-    
-    std::cout << Utils::Color::GREEN << "✓ Natives распакованы\n" << Utils::Color::RESET;
-}
-
 void launchMinecraft(const Config& config) {
     std::string javaCmd = findJava();
     std::string gameDir = config.installPath + "/game";
     std::string libsPath = config.installPath + "/libraries";
     std::string assetsPath = config.installPath + "/assets";
-    std::string nativesDir = config.installPath + "/versions/Fabric 1.21.11/natives";
     
     fs::create_directories(gameDir);
     
+    // Собираем classpath
     std::string cp_string = config.installPath + "\\versions\\Fabric 1.21.11\\Fabric 1.21.11.jar";
     
     if (fs::exists(libsPath)) {
@@ -471,19 +638,20 @@ void launchMinecraft(const Config& config) {
         }
     }
 
+    // Ставим CLASSPATH в env
     _putenv_s("CLASSPATH", cp_string.c_str());
 
+    // Команда запуска
     std::stringstream cmd;
-    cmd << "start \"Minecraft\" /B \"" << javaCmd << "\""; 
+    cmd << "start \"Minecraft\" cmd /k \"\"" << javaCmd << "\""; 
     cmd << " -Xmx" << config.ramMB << "M";
-    cmd << " -Djava.library.path=\"" << nativesDir << "\"";
     if (config.devMode) cmd << " -noverify";
     cmd << " net.fabricmc.loader.impl.launch.knot.KnotClient";
     cmd << " --gameDir \"" << gameDir << "\"";
     cmd << " --version \"Fabric 1.21.11\"";
     cmd << " --assetsDir \"" << assetsPath << "\"";
     cmd << " --assetIndex 29";
-    cmd << " --username " << config.username;
+    cmd << " --username " << config.username << "\"";
     
     std::cout << Utils::Color::CYAN << "🚀 Запуск Minecraft...\n" << Utils::Color::RESET;
     std::cout << Utils::Color::WHITE << "Game Dir: " << gameDir << "\n" << Utils::Color::RESET;
@@ -544,7 +712,6 @@ int main() {
     switch (choice) {
         case 0: {
             setupGameFiles(config);
-            extractNatives(config);
             
             std::string modsPath = config.installPath + "/game/mods";
             fs::create_directories(modsPath);

@@ -1,3 +1,8 @@
+/**
+ * @file utils.h
+ * @brief Утилиты для работы с консолью и системой
+ */
+
 #pragma once
 #include <string>
 #include <iostream>
@@ -12,8 +17,15 @@
     #include <termios.h>
 #endif
 
+/**
+ * @namespace Utils
+ * @brief Вспомогательные функции для лаунчера
+ */
 namespace Utils {
-    // ANSI color codes
+    /**
+     * @namespace Color
+     * @brief ANSI коды цветов для консоли
+     */
     namespace Color {
         const std::string RESET = "\033[0m";
         const std::string RED = "\033[31m";
@@ -26,6 +38,9 @@ namespace Utils {
         const std::string BOLD = "\033[1m";
     }
 
+    /**
+     * @brief Включает поддержку ANSI цветов в консоли Windows
+     */
     inline void enableColors() {
 #ifdef _WIN32
         SetConsoleOutputCP(CP_UTF8);
@@ -37,6 +52,9 @@ namespace Utils {
 #endif
     }
 
+    /**
+     * @brief Очищает экран консоли
+     */
     inline void clearScreen() {
 #ifdef _WIN32
         system("cls");
@@ -45,6 +63,10 @@ namespace Utils {
 #endif
     }
 
+    /**
+     * @brief Возвращает путь по умолчанию для установки
+     * @return Путь к папке установки
+     */
     inline std::string getDefaultPath() {
 #ifdef _WIN32
         const char* appdata = getenv("APPDATA");
@@ -55,9 +77,12 @@ namespace Utils {
 #endif
     }
 
+    /**
+     * @brief Ищет установленную Java в системе
+     * @return Путь к java.exe или "java"
+     */
     inline std::string findJava() {
 #ifdef _WIN32
-        // Проверяем стандартные пути Java
         std::vector<std::string> javaPaths = {
             "C:\\Program Files\\Java\\jdk-26\\bin\\java.exe",
             "C:\\Program Files\\Java\\jdk-25.0.2\\bin\\java.exe",
@@ -73,13 +98,15 @@ namespace Utils {
             }
         }
         
-        // Если не нашли, пробуем через PATH
         return "java";
 #else
         return "java";
 #endif
     }
 
+    /**
+     * @brief Выводит ASCII-арт заголовок лаунчера
+     */
     inline void printHeader() {
         std::cout << Color::CYAN << Color::BOLD;
         std::cout << R"(
@@ -94,6 +121,10 @@ namespace Utils {
 )" << Color::RESET << "\n";
     }
 
+    /**
+     * @brief Читает нажатие клавиши без ожидания Enter
+     * @return Код нажатой клавиши
+     */
     inline int getKeyPress() {
 #ifdef _WIN32
         int ch = _getch();
