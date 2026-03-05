@@ -429,6 +429,10 @@ void selectMods(std::vector<Mod>& mods) {
     }
 }
 
+/**
+ * @brief Распаковывает native библиотеки для текущей ОС
+ * @param config Конфигурация лаунчера
+ */
 void extractNatives(const Config& config) {
     std::string libsPath = config.installPath + "/libraries";
     std::string nativesDir = config.installPath + "/versions/Fabric 1.21.11/natives";
@@ -437,12 +441,27 @@ void extractNatives(const Config& config) {
     
     std::cout << Utils::Color::YELLOW << "📦 Распаковка natives...\n" << Utils::Color::RESET;
     
+    std::string osName = getOsName();
+    std::string nativePattern;
+    
+    if (osName == "windows") {
+        nativePattern = "natives-windows";
+    } else if (osName == "osx") {
+        nativePattern = "natives-macos";
+    } else {
+        nativePattern = "natives-linux";
+    }
+    
     if (fs::exists(libsPath)) {
         for (const auto& entry : fs::recursive_directory_iterator(libsPath)) {
             if (entry.is_regular_file() && entry.path().extension() == ".jar") {
                 std::string filename = entry.path().filename().string();
-                if (filename.find("natives-windows") != std::string::npos) {
+                if (filename.find(nativePattern) != std::string::npos) {
+#ifdef _WIN32
                     std::string cmd = "powershell -Command \"Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('" + entry.path().string() + "', '" + nativesDir + "')\" 2>nul";
+#else
+                    std::string cmd = "unzip -o -q \"" + entry.path().string() + "\" -d \"" + nativesDir + "\" 2>/dev/null";
+#endif
                     system(cmd.c_str());
                 }
             }
@@ -452,6 +471,10 @@ void extractNatives(const Config& config) {
     std::cout << Utils::Color::GREEN << "✓ Natives распакованы\n" << Utils::Color::RESET;
 }
 
+/**
+ * @brief Запускает Minecraft с настроенными параметрами
+ * @param config Конфигурация лаунчера
+ */
 void launchMinecraft(const Config& config) {
     std::string javaCmd = findJava();
     std::string gameDir = config.installPath + "/game";
@@ -461,20 +484,34 @@ void launchMinecraft(const Config& config) {
     
     fs::create_directories(gameDir);
     
+#ifdef _WIN32
     std::string cp_string = config.installPath + "\\versions\\Fabric 1.21.11\\Fabric 1.21.11.jar";
+    char separator = ';';
+#else
+    std::string cp_string = config.installPath + "/versions/Fabric 1.21.11/Fabric 1.21.11.jar";
+    char separator = ':';
+#endif
     
     if (fs::exists(libsPath)) {
         for (const auto& entry : fs::recursive_directory_iterator(libsPath)) {
             if (entry.is_regular_file() && entry.path().extension() == ".jar") {
-                cp_string += ";" + entry.path().string();
+                cp_string += separator + entry.path().string();
             }
         }
     }
 
+#ifdef _WIN32
     _putenv_s("CLASSPATH", cp_string.c_str());
+#else
+    setenv("CLASSPATH", cp_string.c_str(), 1);
+#endif
 
     std::stringstream cmd;
-    cmd << "start \"Minecraft\" /B \"" << javaCmd << "\""; 
+#ifdef _WIN32
+    cmd << "start \"Minecraft\" /B \"" << javaCmd << "\"";
+#else
+    cmd << "\"" << javaCmd << "\"";
+#endif
     cmd << " -Xmx" << config.ramMB << "M";
     cmd << " -Djava.library.path=\"" << nativesDir << "\"";
     if (config.devMode) cmd << " -noverify";
@@ -488,7 +525,12 @@ void launchMinecraft(const Config& config) {
     std::cout << Utils::Color::CYAN << "🚀 Запуск Minecraft...\n" << Utils::Color::RESET;
     std::cout << Utils::Color::WHITE << "Game Dir: " << gameDir << "\n" << Utils::Color::RESET;
     
+#ifdef _WIN32
     system(cmd.str().c_str());
+#else
+    std::string launchCmd = cmd.str() + " &";
+    system(launchCmd.c_str());
+#endif
 }
 
 
