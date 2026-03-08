@@ -16,6 +16,10 @@
 #include <chrono>
 #include <iomanip>
 
+#ifdef _WIN32
+    #include <windows.h>
+#endif
+
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
@@ -268,41 +272,30 @@ void downloadAllResources(const Config& config) {
         
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
-    
     downloadThread.join();
-    
     std::cout << "\n" << Utils::Color::GREEN << "✓ Загружено: " << (totalFiles - stats.skipped.load()) 
               << ", пропущено: " << stats.skipped.load() << "\n" << Utils::Color::RESET;
 }
 
 void downloadAssetsFromJson(const Config& config) {
     std::string jsonPath = config.installPath + "/versions/Fabric 1.21.11/Fabric 1.21.11.json";
-    
     if (!fs::exists(jsonPath)) {
         std::cout << Utils::Color::RED << "✗ JSON не найден\n" << Utils::Color::RESET;
         return;
     }
-    
-    // Читаем version JSON
     std::ifstream file(jsonPath);
     json versionJson;
     file >> versionJson;
-    
     if (!versionJson.contains("assetIndex")) {
         std::cout << Utils::Color::RED << "✗ assetIndex не найден\n" << Utils::Color::RESET;
         return;
     }
-    
     auto assetIndex = versionJson["assetIndex"];
     std::string assetIndexUrl = assetIndex["url"];
     std::string assetIndexId = assetIndex["id"];
-    
     std::cout << Utils::Color::YELLOW << "\n🎨 Asset index: " << assetIndexId << "\n" << Utils::Color::RESET;
-    
-    // Скачиваем asset index
     std::string indexPath = config.installPath + "/assets/indexes/" + assetIndexId + ".json";
     fs::create_directories(fs::path(indexPath).parent_path());
-    
     if (!fs::exists(indexPath)) {
         std::cout << Utils::Color::CYAN << "⬇ Загрузка asset index...\n" << Utils::Color::RESET;
         if (!Downloader::download(assetIndexUrl, indexPath)) {
@@ -310,22 +303,16 @@ void downloadAssetsFromJson(const Config& config) {
             return;
         }
     }
-    
-    // Парсим asset index
     std::ifstream indexFile(indexPath);
     json indexJson;
     indexFile >> indexJson;
-    
     if (!indexJson.contains("objects")) {
         std::cout << Utils::Color::RED << "✗ objects не найдены в asset index\n" << Utils::Color::RESET;
         return;
     }
-    
     auto objects = indexJson["objects"];
     int totalAssets = objects.size();
-    
     std::cout << Utils::Color::YELLOW << "📦 Ассетов для загрузки: " << totalAssets << "\n" << Utils::Color::RESET;
-    
     int current = 0;
     int downloaded = 0;
     int skipped = 0;
@@ -348,8 +335,6 @@ void downloadAssetsFromJson(const Config& config) {
                 downloaded++;
             }
         }
-        
-        // Обновляем прогресс каждые 10 файлов
         if (current % 10 == 0 || current == totalAssets) {
             std::cout << "\r" << Utils::Color::CYAN << "[" << current << "/" << totalAssets << "] ";
             int bars = (current * 50) / totalAssets;
@@ -360,7 +345,6 @@ void downloadAssetsFromJson(const Config& config) {
             std::cout << " " << percent << "%" << Utils::Color::RESET << std::flush;
         }
     }
-    
     std::cout << "\n" << Utils::Color::GREEN << "✓ Ассеты: загружено " << downloaded << ", пропущено " << skipped << "\n" << Utils::Color::RESET;
 }
 
@@ -372,8 +356,6 @@ void setupGameFiles(const Config& config) {
     std::string jsonPath = versionsPath + "/Fabric 1.21.11.json";
     
     fs::create_directories(versionsPath);
-    
-    // Скачиваем jar
     if (!fs::exists(jarPath)) {
         std::cout << Utils::Color::YELLOW << "⬇ Загрузка Fabric jar...\n" << Utils::Color::RESET;
         if (Downloader::download("https://raw.githubusercontent.com/aporia-xyz/Aporia.loader/refs/heads/main/versions/Fabric%201.21.11/Fabric%201.21.11.jar", jarPath)) {
@@ -382,8 +364,6 @@ void setupGameFiles(const Config& config) {
     } else {
         std::cout << Utils::Color::GREEN << "✓ Fabric jar уже существует\n" << Utils::Color::RESET;
     }
-    
-    // Скачиваем json
     if (!fs::exists(jsonPath)) {
         std::cout << Utils::Color::YELLOW << "⬇ Загрузка Fabric json...\n" << Utils::Color::RESET;
         if (Downloader::download("https://raw.githubusercontent.com/aporia-xyz/Aporia.loader/refs/heads/main/versions/Fabric%201.21.11/Fabric%201.21.11.json", jsonPath)) {
@@ -392,8 +372,6 @@ void setupGameFiles(const Config& config) {
     } else {
         std::cout << Utils::Color::GREEN << "✓ Fabric json уже существует\n" << Utils::Color::RESET;
     }
-    
-    // Качаем libraries и assets с общим прогрессом
     downloadAllResources(config);
 }
 
@@ -526,14 +504,32 @@ void launchMinecraft(const Config& config) {
     std::cout << Utils::Color::WHITE << "Game Dir: " << gameDir << "\n" << Utils::Color::RESET;
     
 #ifdef _WIN32
-    system(cmd.str().c_str());
+    STARTUPINFOA si = {sizeof(si)};
+    PROCESS_INFORMATION pi;
+    si.dwFlags = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    
+    std::string fullCmd = "cmd.exe /c " + cmd.str();
+    
+    if (CreateProcessA(NULL, (LPSTR)fullCmd.c_str(), NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+    }
 #else
-    std::string launchCmd = cmd.str() + " &";
+    std::string launchCmd = cmd.str() + " > /dev/null 2>&1 &";
     system(launchCmd.c_str());
 #endif
 }
 
 
+/**
+ * @brief Отрисовывает главное меню
+ * @param selected Индекс выбранного пункта
+ */
+/**
+ * @brief Отрисовывает главное меню
+ * @param selected Индекс выбранного пункта
+ */
 void drawMenu(int selected) {
     Utils::clearScreen();
     Utils::printHeader();
@@ -542,6 +538,7 @@ void drawMenu(int selected) {
         "🚀 Запуск",
         "⚙️  Настройки", 
         "📦 Выбор модов",
+        "📁 Открыть папку",
         "❌ Выход"
     };
     
@@ -555,7 +552,7 @@ void drawMenu(int selected) {
         }
     }
     
-    std::cout << "\n  " << Utils::Color::CYAN << "Используй ↑↓ или 1-4 для выбора" << Utils::Color::RESET << "\n";
+    std::cout << "\n  " << Utils::Color::CYAN << "Используй ↑↓ или 1-5 для выбора" << Utils::Color::RESET << "\n";
 }
 
 int main() {
@@ -572,12 +569,12 @@ int main() {
         
         int key = Utils::getKeyPress();
         
-        if (key >= '1' && key <= '4') {
+        if (key >= '1' && key <= '5') {
             choice = key - '1';
         } else if (key == 'w' || key == 72) {
-            selected = (selected - 1 + 4) % 4;
+            selected = (selected - 1 + 5) % 5;
         } else if (key == 's' || key == 80) {
-            selected = (selected + 1) % 4;
+            selected = (selected + 1) % 5;
         } else if (key == '\r' || key == '\n') {
             choice = selected;
         }
@@ -597,17 +594,75 @@ int main() {
                 Downloader::download("https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.141.2%2B1.21.11/fabric-api-0.141.2%2B1.21.11.jar", fabricApi);
             }
             
-            std::string aporia = modsPath + "/Aporia-0.4.jar";
-            if (!Downloader::fileExists(aporia)) {
+            bool aporiaExists = fs::exists(modsPath + "/Aporia.jar") || fs::exists(modsPath + "/Aporia-0.4.1.jar");
+            
+            std::string aporiaUrl;
+            std::string aporiaFile;
+            int aporiaChoice = 0;
+            
+            if (!aporiaExists) {
+                Utils::clearScreen();
+                Utils::printHeader();
+                std::cout << Utils::Color::MAGENTA << "\n📦 Выбор версии Aporia\n" << Utils::Color::RESET;
+                std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
+                
+                int aporiaSelected = 0;
+                aporiaChoice = -1;
+                
+                while (aporiaChoice == -1) {
+                    Utils::clearScreen();
+                    Utils::printHeader();
+                    std::cout << Utils::Color::MAGENTA << "\n📦 Выбор версии Aporia\n" << Utils::Color::RESET;
+                    std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
+                    
+                    if (aporiaSelected == 0) {
+                        std::cout << "  " << Utils::Color::GREEN << "▶ BETA" << Utils::Color::RESET << " (latest, самая свежая)\n";
+                    } else {
+                        std::cout << "    BETA (latest, самая свежая)\n";
+                    }
+                    
+                    if (aporiaSelected == 1) {
+                        std::cout << "  " << Utils::Color::GREEN << "▶ Стабильная" << Utils::Color::RESET << " (0.4.1)\n";
+                    } else {
+                        std::cout << "    Стабильная (0.4.1)\n";
+                    }
+                    
+                    std::cout << "\n" << Utils::Color::CYAN << "Используй ↑↓ или 1-2 для выбора" << Utils::Color::RESET << "\n";
+                    
+                    int key = Utils::getKeyPress();
+                    
+                    if (key == '1') {
+                        aporiaChoice = 0;
+                    } else if (key == '2') {
+                        aporiaChoice = 1;
+                    } else if (key == 'w' || key == 72) {
+                        aporiaSelected = (aporiaSelected - 1 + 2) % 2;
+                    } else if (key == 's' || key == 80) {
+                        aporiaSelected = (aporiaSelected + 1) % 2;
+                    } else if (key == '\r' || key == '\n') {
+                        aporiaChoice = aporiaSelected;
+                    }
+                }
+                
+                if (aporiaChoice == 0) {
+                    aporiaUrl = "https://raw.githubusercontent.com/dakychan/Aporia/refs/heads/main/beta/latest/Aporia.jar";
+                    aporiaFile = modsPath + "/Aporia.jar";
+                } else {
+                    aporiaUrl = "https://raw.githubusercontent.com/dakychan/Aporia/refs/heads/main/beta/0.4.1/Aporia-0.4.1.jar";
+                    aporiaFile = modsPath + "/Aporia-0.4.1.jar";
+                }
+                
+                if (fs::exists(modsPath + "/Aporia-0.4.jar")) fs::remove(modsPath + "/Aporia-0.4.jar");
+                
                 std::cout << Utils::Color::YELLOW << "\n⬇ Загрузка Aporia...\n" << Utils::Color::RESET;
-                Downloader::download("https://github.com/dakychan/Aporia/releases/download/0.4/Aporia-0.4.jar", aporia);
+                Downloader::download(aporiaUrl, aporiaFile);
             }
             
             auto mods = getMods();
             Downloader::downloadMods(modsPath, mods);
             
             launchMinecraft(config);
-            break;
+            return 0;
         }
         case 1:
             config.setup();
@@ -619,7 +674,38 @@ int main() {
             main();
             break;
         }
-        case 3:
+        case 3: {
+            std::string gameDir = config.installPath + "/game";
+            fs::create_directories(gameDir);
+            
+            std::cout << Utils::Color::CYAN << "📁 Открытие папки: " << gameDir << "\n" << Utils::Color::RESET;
+            
+#ifdef _WIN32
+            std::string absPath = fs::absolute(gameDir).string();
+            std::replace(absPath.begin(), absPath.end(), '/', '\\');
+            std::string cmd = "explorer \"" + absPath + "\"";
+            system(cmd.c_str());
+#elif __APPLE__
+            std::string cmd = "open \"" + gameDir + "\"";
+            system(cmd.c_str());
+#else
+            std::vector<std::string> fileManagers = {"xdg-open", "nautilus", "dolphin", "thunar", "nemo", "caja"};
+            std::string cmd;
+            for (const auto& fm : fileManagers) {
+                if (system(("which " + fm + " > /dev/null 2>&1").c_str()) == 0) {
+                    cmd = fm + " \"" + gameDir + "\" &";
+                    break;
+                }
+            }
+            if (cmd.empty()) cmd = "xdg-open \"" + gameDir + "\" &";
+            system(cmd.c_str());
+#endif
+            
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            main();
+            break;
+        }
+        case 4:
             return 0;
     }
     

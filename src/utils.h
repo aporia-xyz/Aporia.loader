@@ -117,7 +117,7 @@ namespace Utils {
                 ██║  ██║██║     ╚██████╔╝██║  ██║██║██║  ██║
                 ╚═╝  ╚═╝╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝╚═╝  ╚═╝
                                                     
-                            🎮 Loader v0.1 🎮
+                            🎮 Loader v0.1.1 🎮
 )" << Color::RESET << "\n";
     }
 
@@ -131,8 +131,8 @@ namespace Utils {
         if (ch == 0 || ch == 224) {
             ch = _getch();
             switch(ch) {
-                case 72: return 'w'; // Up arrow
-                case 80: return 's'; // Down arrow
+                case 72: return 'w';
+                case 80: return 's';
             }
         }
         return ch;

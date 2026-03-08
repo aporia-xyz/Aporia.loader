@@ -15,9 +15,9 @@
  * @brief Информация о моде для загрузки
  */
 struct Mod {
-    std::string name;      ///< Название мода
-    std::string url;       ///< URL для скачивания
-    bool selected;         ///< Выбран ли мод для установки
+    std::string name; 
+    std::string url;
+    bool selected;
 };
 
 /**
@@ -25,8 +25,8 @@ struct Mod {
  * @brief Задача на загрузку файла
  */
 struct DownloadTask {
-    std::string url;       ///< URL источника
-    std::string output;    ///< Путь для сохранения
+    std::string url;
+    std::string output;
 };
 
 /**
@@ -34,11 +34,11 @@ struct DownloadTask {
  * @brief Статистика многопоточной загрузки
  */
 struct DownloadStats {
-    std::atomic<int> completed{0};           ///< Завершено задач
-    std::atomic<int> failed{0};              ///< Провалено задач
-    std::atomic<int> skipped{0};             ///< Пропущено (уже существуют)
-    std::atomic<long long> bytesDownloaded{0}; ///< Скачано байт
-    std::mutex mutex;                        ///< Мьютекс для синхронизации
+    std::atomic<int> completed{0};
+    std::atomic<int> failed{0};
+    std::atomic<int> skipped{0};
+    std::atomic<long long> bytesDownloaded{0};
+    std::mutex mutex;
 };
 
 /**

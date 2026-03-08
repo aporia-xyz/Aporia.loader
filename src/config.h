@@ -14,10 +14,10 @@
  */
 class Config {
 public:
-    std::string installPath;  ///< Путь установки Minecraft
-    int ramMB;                ///< Выделенная память в МБ
-    std::string username;     ///< Имя пользователя
-    bool devMode;             ///< Режим разработчика
+    std::string installPath;
+    int ramMB;
+    std::string username;
+    bool devMode;
     
     /**
      * @brief Конструктор с инициализацией значений по умолчанию
@@ -40,8 +40,8 @@ public:
     void setup();
     
 private:
-    std::string configFile;                    ///< Путь к файлу конфигурации
-    std::map<std::string, std::string> data;   ///< Данные конфигурации
+    std::string configFile;
+    std::map<std::string, std::string> data;
     
     /**
      * @brief Удаляет пробелы в начале и конце строки
