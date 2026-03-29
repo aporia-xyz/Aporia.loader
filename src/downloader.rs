@@ -34,14 +34,15 @@ pub struct DownloadStats {
 pub struct Downloader;
 
 impl Downloader {
-    /// Загрузить файл по URL
+    /// Загрузить файл по URL с потоком
     pub async fn download(url: &str, output: &str) -> anyhow::Result<u64> {
         let client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::limited(10))
+            .timeout(std::time::Duration::from_secs(600))
             .build()?;
         
         log::info!("Downloading from: {}", url);
-        let response = client.get(url).send().await?;
+        let mut response = client.get(url).send().await?;
         
         log::info!("Response status: {}", response.status());
         
@@ -54,24 +55,37 @@ impl Downloader {
             ));
         }
         
-        let bytes = response.bytes().await?;
-        
-        log::info!("Downloaded {} bytes", bytes.len());
-        
-        // Проверяем, что файл не пустой
-        if bytes.is_empty() {
-            return Err(anyhow::anyhow!("Downloaded file is empty"));
-        }
-        
+        // Создаём директорию
         if let Some(parent) = std::path::Path::new(output).parent() {
             std::fs::create_dir_all(parent)?;
         }
         
-        log::info!("Writing to: {}", output);
-        std::fs::write(output, &bytes)?;
-        log::info!("File written successfully");
+        log::info!("Creating file: {}", output);
+        let mut file = tokio::fs::File::create(output).await?;
         
-        Ok(bytes.len() as u64)
+        let mut total_downloaded = 0u64;
+        
+        log::info!("Starting streaming download");
+        while let Ok(Some(chunk)) = response.chunk().await {
+            total_downloaded += chunk.len() as u64;
+            
+            // Логируем прогресс каждые 50MB
+            if total_downloaded % (50 * 1024 * 1024) == 0 {
+                log::info!("Downloaded: {} MB", total_downloaded / 1024 / 1024);
+            }
+            
+            use tokio::io::AsyncWriteExt;
+            file.write_all(&chunk).await?;
+        }
+        
+        log::info!("Download complete: {} bytes", total_downloaded);
+        
+        // Проверяем, что файл не пустой
+        if total_downloaded == 0 {
+            return Err(anyhow::anyhow!("Downloaded file is empty"));
+        }
+        
+        Ok(total_downloaded)
     }
 
     /// Загрузить файлы параллельно

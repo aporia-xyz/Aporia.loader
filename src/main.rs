@@ -514,6 +514,7 @@ impl AporiaApp {
     
     /// Начать запуск
     fn start_launch(&mut self) {
+        log::info!("start_launch called");
         self.is_launching = true;
         self.launch_complete = false;
         self.launch_progress = 0.0;
@@ -523,6 +524,8 @@ impl AporiaApp {
         let version = self.selected_version.clone();
         let mods = self.mods.clone();
         
+        log::info!("Selected version: {:?}", version);
+        
         let (tx, rx) = mpsc::channel::<String>();
         self.rx = Some(rx);
         
@@ -531,9 +534,11 @@ impl AporiaApp {
             
             match version {
                 McVersion::Fabric => {
+                    log::info!("Launching Fabric");
                     launch_fabric(&config, &mods, &tx);
                 }
                 McVersion::MCP => {
+                    log::info!("Launching MCP");
                     launch_cheat(&config, &tx);
                 }
             }
@@ -610,10 +615,12 @@ fn launch_fabric(config: &Config, mods: &[ModInfo], tx: &mpsc::Sender<String>) {
 
 /// Запуск Cheat версии
 fn launch_cheat(config: &Config, tx: &mpsc::Sender<String>) {
+    log::info!("launch_cheat started");
     let install_path = &config.install_path;
     
     let _ = tx.send("Checking Java...".to_string());
     let java_path = ensure_java(install_path, tx);
+    log::info!("Java path: {}", java_path);
     
     let _ = tx.send("PROGRESS:0|Preparing MCP client...".to_string());
     
