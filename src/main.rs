@@ -640,6 +640,28 @@ fn launch_cheat(config: &Config, tx: &mpsc::Sender<String>) {
 
 /// Обеспечить наличие Java
 fn ensure_java(install_path: &str, tx: &mpsc::Sender<String>) -> String {
+    let _ = tx.send("Checking Java in PATH...".to_string());
+    
+    log::info!("Checking for Java in system PATH");
+    
+    // Пытаемся найти java в PATH
+    match Command::new("java")
+        .arg("-version")
+        .output()
+    {
+        Ok(output) => {
+            if output.status.success() {
+                log::info!("Java found in PATH");
+                let _ = tx.send("Java found".to_string());
+                return "java".to_string();
+            }
+        }
+        Err(e) => {
+            log::warn!("Java not found in PATH: {}", e);
+        }
+    }
+    
+    // Если java не найдена в PATH, пытаемся использовать локальную копию
     let java_dir = PathBuf::from(install_path).join("java");
     
     #[cfg(target_os = "windows")]
@@ -649,57 +671,14 @@ fn ensure_java(install_path: &str, tx: &mpsc::Sender<String>) -> String {
     let java_exe = java_dir.join("jdk-26").join("bin").join("java");
     
     if java_exe.exists() {
-        let _ = tx.send("Java найдена".to_string());
+        log::info!("Using local Java from: {}", java_exe.display());
+        let _ = tx.send("Using local Java".to_string());
         return java_exe.to_string_lossy().to_string();
     }
     
-    let _ = tx.send("Загрузка Java 26...".to_string());
-    
-    #[cfg(target_os = "windows")]
-    let java_url = "https://download.java.net/java/GA/jdk26/c3cc523845074aa0af4f5e1e1ed4151d/35/GPL/openjdk-26_windows-x64_bin.zip";
-    
-    #[cfg(target_os = "macos")]
-    let java_url = "https://download.java.net/java/GA/jdk26/c3cc523845074aa0af4f5e1e1ed4151d/35/GPL/openjdk-26_osx-x64_bin.tar.gz";
-    
-    #[cfg(target_os = "linux")]
-    let java_url = "https://download.java.net/java/GA/jdk26/c3cc523845074aa0af4f5e1e1ed4151d/35/GPL/openjdk-26_linux-x64_bin.tar.gz";
-    
-    let _ = fs::create_dir_all(&java_dir);
-    let archive_path = java_dir.join("java-26.zip");
-    
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    if rt.block_on(Downloader::download(java_url, archive_path.to_str().unwrap())).is_ok() {
-        let _ = tx.send("Распаковка Java...".to_string());
-        
-        #[cfg(target_os = "windows")]
-        {
-            let _ = Command::new("powershell")
-                .args([
-                    "-Command",
-                    &format!(
-                        "Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('{}', '{}')",
-                        archive_path.display(),
-                        java_dir.display()
-                    )
-                ])
-                .output();
-        }
-        
-        #[cfg(any(target_os = "macos", target_os = "linux"))]
-        {
-            let _ = Command::new("tar")
-                .args(["-xzf", archive_path.to_str().unwrap(), "-C", java_dir.to_str().unwrap()])
-                .output();
-        }
-        
-        let _ = fs::remove_file(archive_path);
-    }
-    
-    if java_exe.exists() {
-        java_exe.to_string_lossy().to_string()
-    } else {
-        "java".to_string()
-    }
+    log::error!("Java not found in PATH or local installation");
+    let _ = tx.send("Java not found - please install Java".to_string());
+    "java".to_string()
 }
 
 /// Загрузить библиотеки из JSON
