@@ -612,29 +612,68 @@ fn launch_fabric(config: &Config, mods: &[ModInfo], tx: &mpsc::Sender<String>) {
 fn launch_cheat(config: &Config, tx: &mpsc::Sender<String>) {
     let install_path = &config.install_path;
     
-    let _ = tx.send("Проверка Java...".to_string());
+    let _ = tx.send("Checking Java...".to_string());
     let java_path = ensure_java(install_path, tx);
     
-    let _ = tx.send("Загрузка Cheat клиента...".to_string());
+    let _ = tx.send("Downloading MCP client...".to_string());
     
-    // Загружаем Cheat клиент
-    let versions_path = PathBuf::from(install_path)
-        .join("versions")
-        .join("Aporia.client");
+    // Определяем путь в зависимости от ОС
+    let versions_path = if cfg!(target_os = "windows") {
+        PathBuf::from(install_path).join("versions").join("Aporia.client")
+    } else {
+        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+        home.join(".apr").join("versions").join("Aporia.client")
+    };
     
     let _ = fs::create_dir_all(&versions_path);
     
     let jar_path = versions_path.join("Aporia.client.jar");
+    let json_path = versions_path.join("Aporia.client.json");
     
+    log::info!("MCP versions path: {}", versions_path.display());
+    log::info!("MCP JAR path: {}", jar_path.display());
+    
+    // Скачиваем JAR если не существует
     if !jar_path.exists() {
-        // URL для cheat версии - нужно указать актуальный
-        let url = "https://raw.githubusercontent.com/aporia-xyz/Aporia.loader/refs/heads/main/versions/Aporia.client/Aporia.client.jar";
-        let _ = tokio::runtime::Runtime::new()
-            .unwrap()
-            .block_on(Downloader::download(url, jar_path.to_str().unwrap()));
+        let jar_url = "https://github.com/dakychan/Aporia/releases/download/0.5.0/Aporia.client.jar";
+        log::info!("Downloading JAR from: {}", jar_url);
+        let _ = tx.send("Downloading JAR...".to_string());
+        
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        match rt.block_on(Downloader::download(jar_url, jar_path.to_str().unwrap())) {
+            Ok(size) => {
+                log::info!("Downloaded JAR: {} bytes", size);
+                let _ = tx.send(format!("Downloaded JAR: {} bytes", size));
+            }
+            Err(e) => {
+                log::error!("Failed to download JAR: {}", e);
+                let _ = tx.send(format!("Failed to download JAR: {}", e));
+            }
+        }
+    } else {
+        log::info!("JAR already exists");
     }
     
-    let _ = tx.send("Запуск...".to_string());
+    // Скачиваем JSON если не существует
+    if !json_path.exists() {
+        let json_url = "https://github.com/dakychan/Aporia/releases/download/0.5.0/Aporia.client.json";
+        log::info!("Downloading JSON from: {}", json_url);
+        let _ = tx.send("Downloading JSON...".to_string());
+        
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        match rt.block_on(Downloader::download(json_url, json_path.to_str().unwrap())) {
+            Ok(size) => {
+                log::info!("Downloaded JSON: {} bytes", size);
+            }
+            Err(e) => {
+                log::error!("Failed to download JSON: {}", e);
+            }
+        }
+    } else {
+        log::info!("JSON already exists");
+    }
+    
+    let _ = tx.send("Launching...".to_string());
     let _ = launch_minecraft_cheat(config, &java_path, &jar_path);
 }
 
