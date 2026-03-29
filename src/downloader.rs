@@ -42,7 +42,7 @@ impl Downloader {
         let client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::limited(10))
             .danger_accept_invalid_certs(true)
-            .timeout(std::time::Duration::from_secs(600)) // 10 минут
+            .timeout(std::time::Duration::from_secs(600))
             .build()
             .context("Failed to create HTTP client")?;
 
@@ -66,28 +66,19 @@ impl Downloader {
             fs::create_dir_all(parent).context("Failed to create directory")?;
         }
 
-        let mut file = tokio::fs::File::create(output)
+        log::info!("Downloading to: {}", output);
+        
+        // Просто скачиваем весь файл в памяти и пишем
+        let bytes = response.bytes().await.context("Failed to download bytes")?;
+        log::info!("Downloaded {:.1}MB to memory", bytes.len() as f64 / 1_000_000.0);
+        
+        // Пишем на диск
+        tokio::fs::write(output, &bytes)
             .await
-            .context("Failed to create file")?;
+            .context("Failed to write file")?;
         
-        let mut stream = response.bytes_stream();
-        let mut downloaded: u64 = 0;
-        
-        use futures::stream::StreamExt;
-        
-        while let Some(chunk_result) = stream.next().await {
-            let chunk = chunk_result.context("Failed to read chunk")?;
-            file.write_all(&chunk).await.context("Failed to write chunk")?;
-            downloaded += chunk.len() as u64;
-            
-            log::info!("Downloaded: {:.1}MB", downloaded as f64 / 1_000_000.0);
-        }
-        
-        file.flush().await.context("Failed to flush file")?;
-        file.sync_all().await.context("Failed to sync file")?;
-        
-        log::info!("Download complete: {:.1}MB", downloaded as f64 / 1_000_000.0);
-        Ok(downloaded)
+        log::info!("File written: {:.1}MB", bytes.len() as f64 / 1_000_000.0);
+        Ok(bytes.len() as u64)
     }
 
     /// Загрузить файлы параллельно
