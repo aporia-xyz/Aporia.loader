@@ -633,11 +633,28 @@ fn launch_cheat(config: &Config, tx: &mpsc::Sender<String>) {
     log::info!("MCP versions path: {}", versions_path.display());
     log::info!("MCP JAR path: {}", jar_path.display());
     
-    // Скачиваем JAR если не существует
-    if !jar_path.exists() {
-        let jar_url = "https://github.com/dakychan/Aporia/releases/download/0.5.0/Aporia.client.jar";
+    // Скачиваем JAR - всегда перепроверяем размер
+    let jar_url = "https://github.com/dakychan/Aporia/releases/download/0.5.0/Aporia.client.jar";
+    let should_download_jar = if jar_path.exists() {
+        match fs::metadata(&jar_path) {
+            Ok(metadata) => {
+                let size = metadata.len();
+                log::info!("JAR exists with size: {} bytes", size);
+                // Если файл меньше 1MB, скачиваем заново
+                size < 1_000_000
+            }
+            Err(_) => true,
+        }
+    } else {
+        true
+    };
+    
+    if should_download_jar {
         log::info!("Downloading JAR from: {}", jar_url);
         let _ = tx.send("Downloading JAR...".to_string());
+        
+        // Удаляем старый файл если существует
+        let _ = fs::remove_file(&jar_path);
         
         let rt = tokio::runtime::Runtime::new().unwrap();
         match rt.block_on(Downloader::download(jar_url, jar_path.to_str().unwrap())) {
@@ -648,10 +665,11 @@ fn launch_cheat(config: &Config, tx: &mpsc::Sender<String>) {
             Err(e) => {
                 log::error!("Failed to download JAR: {}", e);
                 let _ = tx.send(format!("Failed to download JAR: {}", e));
+                return;
             }
         }
     } else {
-        log::info!("JAR already exists");
+        log::info!("JAR already exists with valid size");
     }
     
     // Скачиваем JSON если не существует
