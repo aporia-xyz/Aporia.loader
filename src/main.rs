@@ -909,6 +909,14 @@ fn launch_minecraft_fabric(config: &Config, java_path: &str) -> anyhow::Result<(
         .collect::<Vec<_>>()
         .join(if cfg!(windows) { ";" } else { ":" });
     
+    log::info!("Launching Fabric with:");
+    log::info!("  Java: {}", java_path);
+    log::info!("  Classpath entries: {}", classpath.len());
+    log::info!("  Game dir: {}", game_dir.display());
+    log::info!("  Natives dir: {}", natives_dir.display());
+    log::info!("  Username: {}", config.username);
+    log::info!("  RAM: {}M", config.ram_mb);
+    
     let mut cmd = Command::new(java_path);
     cmd.arg(format!("-Xmx{}M", config.ram_mb));
     cmd.arg(format!("-Djava.library.path={}", natives_dir.display()));
@@ -925,9 +933,19 @@ fn launch_minecraft_fabric(config: &Config, java_path: &str) -> anyhow::Result<(
     cmd.arg("--username").arg(&config.username);
     
     cmd.env("CLASSPATH", &classpath_str);
-    cmd.spawn()?;
     
-    Ok(())
+    log::info!("Executing Fabric command");
+    
+    match cmd.spawn() {
+        Ok(_) => {
+            log::info!("Fabric process spawned successfully");
+            Ok(())
+        }
+        Err(e) => {
+            log::error!("Failed to spawn Fabric process: {}", e);
+            Err(e.into())
+        }
+    }
 }
 
 /// Запуск Minecraft Cheat (standalone)
@@ -939,6 +957,14 @@ fn launch_minecraft_cheat(config: &Config, java_path: &str, jar_path: &PathBuf) 
     
     let classpath_str = jar_path.to_str().unwrap();
     
+    log::info!("Launching MCP with:");
+    log::info!("  Java: {}", java_path);
+    log::info!("  JAR: {}", jar_path.display());
+    log::info!("  Classpath: {}", classpath_str);
+    log::info!("  Game dir: {}", game_dir.display());
+    log::info!("  Username: {}", config.username);
+    log::info!("  RAM: {}M", config.ram_mb);
+    
     let mut cmd = Command::new(java_path);
     cmd.arg(format!("-Xmx{}M", config.ram_mb));
     
@@ -946,7 +972,7 @@ fn launch_minecraft_cheat(config: &Config, java_path: &str, jar_path: &PathBuf) 
         cmd.arg("-noverify");
     }
     
-    // Запуск как standalone без assetIndex
+    // Запуск как standalone
     cmd.arg("-cp").arg(classpath_str);
     cmd.arg("net.minecraft.client.main.Main");
     cmd.arg("--version").arg("mcp");
@@ -955,11 +981,20 @@ fn launch_minecraft_cheat(config: &Config, java_path: &str, jar_path: &PathBuf) 
     cmd.arg("--assetIndex").arg("29");
     cmd.arg("--userProperties").arg("{}");
     cmd.arg("--username").arg(&config.username);
+    cmd.arg("--gameDir").arg(&game_dir);
     
-    cmd.env("CLASSPATH", classpath_str);
-    cmd.spawn()?;
+    log::info!("Executing command: {:?}", cmd);
     
-    Ok(())
+    match cmd.spawn() {
+        Ok(_) => {
+            log::info!("MCP process spawned successfully");
+            Ok(())
+        }
+        Err(e) => {
+            log::error!("Failed to spawn MCP process: {}", e);
+            Err(e.into())
+        }
+    }
 }
 
 /// Парсинг changelog
