@@ -37,7 +37,7 @@ pub struct DownloadStats {
 pub struct Downloader;
 
 impl Downloader {
-    /// Загрузить файл по URL
+    /// Загрузить файл по URL с прогрессом
     pub async fn download(url: &str, output: &str) -> anyhow::Result<u64> {
         let client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::limited(10))
@@ -55,22 +55,37 @@ impl Downloader {
             anyhow::bail!("HTTP error: {}", response.status());
         }
 
-        let _total_size = response.content_length().unwrap_or(0);
+        let total_size = response.content_length().unwrap_or(0);
+        log::info!("Downloading {} bytes from {}", total_size, url);
         
         // Создаем директорию если нужно
         if let Some(parent) = Path::new(output).parent() {
             fs::create_dir_all(parent).context("Failed to create directory")?;
         }
 
-        let bytes = response.bytes().await.context("Failed to read response")?;
-        
         let mut file = tokio::fs::File::create(output)
             .await
             .context("Failed to create file")?;
         
-        file.write_all(&bytes).await.context("Failed to write file")?;
+        let mut stream = response.bytes_stream();
+        let mut downloaded: u64 = 0;
         
-        Ok(bytes.len() as u64)
+        use futures::stream::StreamExt;
+        
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.context("Failed to read chunk")?;
+            file.write_all(&chunk).await.context("Failed to write chunk")?;
+            downloaded += chunk.len() as u64;
+            
+            // Логируем прогресс каждые 10MB
+            if total_size > 0 && downloaded % (10 * 1024 * 1024) == 0 {
+                let percent = (downloaded as f64 / total_size as f64 * 100.0) as u32;
+                log::info!("Download progress: {}% ({}/{}MB)", percent, downloaded / 1_000_000, total_size / 1_000_000);
+            }
+        }
+        
+        log::info!("Download complete: {} bytes", downloaded);
+        Ok(downloaded)
     }
 
     /// Загрузить файлы параллельно
