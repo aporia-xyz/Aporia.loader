@@ -651,15 +651,34 @@ fn launch_cheat(config: &Config, tx: &mpsc::Sender<String>) {
     
     if should_download_jar {
         log::info!("Downloading JAR from: {}", jar_url);
+        log::info!("Target path: {}", jar_path.display());
         let _ = tx.send("PROGRESS:5|Downloading JAR (this may take a while)...".to_string());
         
         // Удаляем старый файл если существует
-        let _ = fs::remove_file(&jar_path);
+        if jar_path.exists() {
+            match fs::remove_file(&jar_path) {
+                Ok(_) => log::info!("Removed old JAR file"),
+                Err(e) => log::warn!("Failed to remove old JAR: {}", e),
+            }
+        }
         
         let rt = tokio::runtime::Runtime::new().unwrap();
         match rt.block_on(Downloader::download(jar_url, jar_path.to_str().unwrap())) {
             Ok(size) => {
                 log::info!("Downloaded JAR: {} bytes", size);
+                
+                // Проверяем, что файл действительно существует и имеет размер
+                match fs::metadata(&jar_path) {
+                    Ok(metadata) => {
+                        log::info!("JAR file verified: {} bytes on disk", metadata.len());
+                    }
+                    Err(e) => {
+                        log::error!("JAR file not found after download: {}", e);
+                        let _ = tx.send(format!("PROGRESS:0|JAR file not found after download: {}", e));
+                        return;
+                    }
+                }
+                
                 let size_mb = size / 1_000_000;
                 let _ = tx.send(format!("PROGRESS:50|Downloaded JAR: {}MB", size_mb));
             }

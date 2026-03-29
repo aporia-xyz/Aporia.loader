@@ -2,79 +2,9 @@
 
 use std::path::Path;
 use std::fs;
-
-/// Загрузить файл по URL
-pub async fn download_file(url: &str, output: &str) -> anyhow::Result<()> {
-    // Создаем директорию если нужно
-    if let Some(parent) = Path::new(output).parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    // Просто качаем и пишем
-    let client = reqwest::Client::new();
-    let response = client.get(url).send().await?;
-    let bytes = response.bytes().await?;
-    
-    fs::write(output, &bytes)?;
-    Ok(())
-}
-
-pub struct Downloader;
-
-impl Downloader {
-    /// Загрузить файл по URL
-    pub async fn download(url: &str, output: &str) -> anyhow::Result<u64> {
-        download_file(url, output).await?;
-        
-        let size = fs::metadata(output)?.len();
-        Ok(size)
-    }
-
-    /// Загрузить моды
-    pub async fn download_mods(mods_path: &str, mods: &[Mod]) -> Vec<(String, bool)> {
-        let mut results = Vec::new();
-        
-        if let Err(e) = fs::create_dir_all(mods_path) {
-            log::error!("Failed to create mods directory: {}", e);
-            return results;
-        }
-
-        for mod_info in mods {
-            if !mod_info.selected {
-                continue;
-            }
-
-            let filename = mod_info.url.split('/').last().unwrap_or("unknown.jar");
-            let decoded_filename = urlencoding::decode(filename)
-                .unwrap_or(std::borrow::Cow::Borrowed(filename))
-                .to_string();
-            
-            let output_path = Path::new(mods_path).join(&decoded_filename);
-            
-            if output_path.exists() {
-                results.push((mod_info.name.clone(), true));
-                continue;
-            }
-
-            match download_file(&mod_info.url, output_path.to_str().unwrap()).await {
-                Ok(_) => {
-                    results.push((mod_info.name.clone(), true));
-                }
-                Err(e) => {
-                    log::error!("Failed to download mod {}: {}", mod_info.name, e);
-                    results.push((mod_info.name.clone(), false));
-                }
-            }
-        }
-
-        results
-    }
-
-    /// Проверить существование файла
-    pub fn file_exists(path: &str) -> bool {
-        Path::new(path).exists()
-    }
-}
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, AtomicU64, Ordering};
+use futures::future::join_all;
 
 /// Информация о моде
 #[derive(Debug, Clone)]
@@ -106,15 +36,41 @@ pub struct Downloader;
 impl Downloader {
     /// Загрузить файл по URL
     pub async fn download(url: &str, output: &str) -> anyhow::Result<u64> {
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::limited(10))
+            .build()?;
+        
+        log::info!("Downloading from: {}", url);
         let response = client.get(url).send().await?;
+        
+        log::info!("Response status: {}", response.status());
+        
+        // Проверяем статус ответа
+        if !response.status().is_success() {
+            return Err(anyhow::anyhow!(
+                "HTTP error {}: {}",
+                response.status(),
+                response.status().canonical_reason().unwrap_or("Unknown error")
+            ));
+        }
+        
         let bytes = response.bytes().await?;
+        
+        log::info!("Downloaded {} bytes", bytes.len());
+        
+        // Проверяем, что файл не пустой
+        if bytes.is_empty() {
+            return Err(anyhow::anyhow!("Downloaded file is empty"));
+        }
         
         if let Some(parent) = std::path::Path::new(output).parent() {
             std::fs::create_dir_all(parent)?;
         }
         
+        log::info!("Writing to: {}", output);
         std::fs::write(output, &bytes)?;
+        log::info!("File written successfully");
+        
         Ok(bytes.len() as u64)
     }
 
