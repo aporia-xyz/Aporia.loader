@@ -69,10 +69,13 @@ struct AporiaApp {
     
     // Login screen
     username_input: String,
+    login_animation: f32, // 0.0 to 1.0
     
     // Main screen
     changelog: Vec<ChangelogEntry>,
     changelog_loading: bool,
+    current_changelog_index: usize,
+    main_animation: f32, // 0.0 to 1.0 for slide-in
     
     // Launch status
     is_launching: bool,
@@ -98,8 +101,11 @@ impl Default for AporiaApp {
             config: config.clone(),
             selected_version: McVersion::Fabric121,
             username_input: config.username.clone(),
+            login_animation: 0.0,
             changelog: Vec::new(),
             changelog_loading: false,
+            current_changelog_index: 0,
+            main_animation: 0.0,
             is_launching: false,
             launch_progress: 0.0,
             launch_message: String::new(),
@@ -135,35 +141,30 @@ impl Default for AporiaApp {
 
 impl AporiaApp {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        // Настройка стилей с блюром и прозрачностями
+        // Настройка стилей - тёмная тема
         let mut style = (*cc.egui_ctx.style()).clone();
         style.spacing.item_spacing = egui::vec2(12.0, 8.0);
         style.spacing.button_padding = egui::vec2(16.0, 10.0);
         style.visuals.button_frame = true;
-        style.visuals.window_fill = egui::Color32::from_rgba_unmultiplied(20, 20, 30, 240);
-        style.visuals.panel_fill = egui::Color32::from_rgba_unmultiplied(15, 15, 25, 235);
-        style.visuals.extreme_bg_color = egui::Color32::from_rgba_unmultiplied(10, 10, 20, 250);
+        style.visuals.window_fill = egui::Color32::from_rgba_unmultiplied(15, 15, 20, 255);
+        style.visuals.panel_fill = egui::Color32::from_rgba_unmultiplied(12, 12, 18, 255);
+        style.visuals.extreme_bg_color = egui::Color32::from_rgba_unmultiplied(8, 8, 12, 255);
         
-        // Цвета под систему Taryn - лаконичные, приглушённые
-        style.visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgba_unmultiplied(30, 30, 45, 200);
-        style.visuals.widgets.inactive.bg_fill = egui::Color32::from_rgba_unmultiplied(40, 40, 60, 210);
-        style.visuals.widgets.hovered.bg_fill = egui::Color32::from_rgba_unmultiplied(50, 50, 75, 220);
-        style.visuals.widgets.active.bg_fill = egui::Color32::from_rgba_unmultiplied(60, 60, 90, 230);
+        style.visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgba_unmultiplied(25, 25, 35, 200);
+        style.visuals.widgets.inactive.bg_fill = egui::Color32::from_rgba_unmultiplied(35, 35, 50, 210);
+        style.visuals.widgets.hovered.bg_fill = egui::Color32::from_rgba_unmultiplied(45, 45, 65, 220);
+        style.visuals.widgets.active.bg_fill = egui::Color32::from_rgba_unmultiplied(55, 55, 80, 230);
         
         cc.egui_ctx.set_style(style);
         
-        // Загружаем changelog
         let mut app = Self::default();
         app.load_changelog();
-        
         app
     }
     
     /// Загрузка changelog из GitHub
     fn load_changelog(&mut self) {
         self.changelog_loading = true;
-        
-        // Дефолтный changelog пока загружаем
         self.changelog = default_changelog();
         
         std::thread::spawn(|| {
@@ -176,41 +177,36 @@ impl AporiaApp {
         self.changelog_loading = false;
     }
     
-    /// Отрисовка топбара
-    fn draw_topbar(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            // Логотип слева - приглушённый голубой
-            ui.label(egui::RichText::new("◆ Aporia").size(18.0).strong().color(egui::Color32::from_rgb(120, 180, 200)));
-            
-            ui.add_space(30.0);
-            
-            // Добро пожаловать
-            if !self.config.username.is_empty() {
-                ui.label(egui::RichText::new(format!("Welcome, {}", self.config.username)).size(13.0).color(egui::Color32::from_rgb(180, 180, 190)));
-            }
-            
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                // Кнопка настроек справа
-                if ui.button(egui::RichText::new("⚙").size(16.0)).clicked() {
-                    self.state = AppState::Settings;
-                }
-                
-                ui.add_space(10.0);
-            });
-        });
-    }
-    
-    /// Экран логина
+    /// Экран логина с анимацией
     fn draw_login(&mut self, ui: &mut egui::Ui) {
+        // Анимация входа
+        self.login_animation = (self.login_animation + 0.05).min(1.0);
+        
         ui.vertical_centered(|ui| {
-            ui.add_space(60.0);
+            ui.add_space(80.0 * self.login_animation);
             
-            ui.label(egui::RichText::new("◆ Aporia").size(56.0).strong().color(egui::Color32::from_rgb(120, 180, 200)));
-            ui.label(egui::RichText::new("Launcher").size(20.0).color(egui::Color32::from_rgb(150, 150, 160)));
+            let alpha = (self.login_animation * 255.0) as u8;
             
-            ui.add_space(60.0);
+            ui.label(
+                egui::RichText::new("Aporia.cc")
+                    .size(64.0)
+                    .strong()
+                    .color(egui::Color32::from_rgba_unmultiplied(120, 180, 200, alpha))
+            );
             
-            ui.label(egui::RichText::new("Enter your nickname").size(15.0).color(egui::Color32::from_rgb(200, 200, 210)));
+            ui.label(
+                egui::RichText::new("Aporia - чит клиент, старающийся получиться более открытым и гибким чем остальные")
+                    .size(14.0)
+                    .color(egui::Color32::from_rgba_unmultiplied(150, 150, 160, alpha))
+            );
+            
+            ui.add_space(60.0 * self.login_animation);
+            
+            ui.label(
+                egui::RichText::new("Enter your nickname")
+                    .size(15.0)
+                    .color(egui::Color32::from_rgba_unmultiplied(200, 200, 210, alpha))
+            );
             ui.add_space(15.0);
             
             let text_edit = egui::TextEdit::singleline(&mut self.username_input)
@@ -224,9 +220,13 @@ impl AporiaApp {
             
             ui.add_space(25.0);
             
-            let button = egui::Button::new(egui::RichText::new("Continue").size(16.0))
-                .min_size(egui::vec2(220.0, 48.0))
-                .fill(egui::Color32::from_rgb(100, 160, 180));
+            let button = egui::Button::new(
+                egui::RichText::new("Continue")
+                    .size(16.0)
+                    .color(egui::Color32::from_rgba_unmultiplied(255, 255, 255, alpha))
+            )
+            .min_size(egui::vec2(220.0, 48.0))
+            .fill(egui::Color32::from_rgba_unmultiplied(100, 160, 180, (alpha as f32 * 0.8) as u8));
             
             if ui.add(button).clicked() {
                 self.complete_login();
@@ -240,30 +240,108 @@ impl AporiaApp {
             let config_path = self.config.config_path();
             let _ = self.config.save(&config_path);
             self.state = AppState::Main;
+            self.main_animation = 0.0;
+            self.login_animation = 0.0;
         }
     }
     
-    /// Главный экран - контент
+    /// Главный экран - новый дизайн
     fn draw_main_content(&mut self, ui: &mut egui::Ui) {
+        // Анимация входа главного меню
+        self.main_animation = (self.main_animation + 0.08).min(1.0);
+        
         ui.horizontal(|ui| {
-            // Левая панель - версия и запуск
+            // Левая панель - описание и кнопки
             ui.vertical(|ui| {
-                ui.add_space(25.0);
-
-                // Выбор версии
-                ui.label(egui::RichText::new("Version").size(15.0).strong().color(egui::Color32::from_rgb(200, 200, 210)));
-                ui.add_space(12.0);
-
+                ui.add_space(20.0);
+                
+                // Заголовок
+                ui.label(
+                    egui::RichText::new("Aporia.cc")
+                        .size(32.0)
+                        .strong()
+                        .color(egui::Color32::from_rgb(120, 180, 200))
+                );
+                
+                ui.label(
+                    egui::RichText::new("Aporia - чит клиент, старающийся получиться более открытым и гибким чем остальные")
+                        .size(12.0)
+                        .color(egui::Color32::from_rgb(150, 150, 160))
+                );
+                
+                ui.add_space(30.0);
+                
+                // Описание версии с навигацией
+                if !self.changelog.is_empty() {
+                    let entry = &self.changelog[self.current_changelog_index];
+                    
+                    ui.label(
+                        egui::RichText::new(&entry.version)
+                            .size(20.0)
+                            .strong()
+                            .color(egui::Color32::from_rgb(120, 180, 200))
+                    );
+                    
+                    ui.label(
+                        egui::RichText::new(&entry.date)
+                            .size(11.0)
+                            .color(egui::Color32::from_rgb(120, 120, 130))
+                    );
+                    
+                    ui.add_space(15.0);
+                    
+                    // Описание с прокруткой
+                    egui::ScrollArea::vertical().max_height(150.0).show(ui, |ui| {
+                        for change in &entry.changes {
+                            ui.label(
+                                egui::RichText::new(format!("• {}", change))
+                                    .size(12.0)
+                                    .color(egui::Color32::from_rgb(180, 180, 190))
+                            );
+                        }
+                    });
+                    
+                    ui.add_space(20.0);
+                    
+                    // Кнопки навигации
+                    ui.horizontal(|ui| {
+                        if ui.button("◀ Prev").clicked() && self.current_changelog_index > 0 {
+                            self.current_changelog_index -= 1;
+                        }
+                        
+                        ui.label(
+                            egui::RichText::new(format!("{}/{}", self.current_changelog_index + 1, self.changelog.len()))
+                                .size(12.0)
+                                .color(egui::Color32::from_rgb(150, 150, 160))
+                        );
+                        
+                        if ui.button("Next ▶").clicked() && self.current_changelog_index < self.changelog.len() - 1 {
+                            self.current_changelog_index += 1;
+                        }
+                    });
+                }
+                
+                ui.add_space(40.0);
+                
+                // Версия сверху
+                ui.label(
+                    egui::RichText::new("Version")
+                        .size(14.0)
+                        .strong()
+                        .color(egui::Color32::from_rgb(200, 200, 210))
+                );
+                ui.add_space(8.0);
+                
                 egui::ComboBox::from_label("")
                     .selected_text(self.selected_version.name())
                     .show_ui(ui, |ui| {
                         ui.selectable_value(&mut self.selected_version, McVersion::Fabric121, "Fabric 1.21.11");
                         ui.selectable_value(&mut self.selected_version, McVersion::CheatLatest, "Cheat Latest");
                     });
-
-                ui.add_space(40.0);
-
-                // Кнопка запуска - контрастный цвет, не сливается
+                
+                ui.add_space(30.0);
+                
+                // Кнопка запуска внизу - контрастная
                 let button_text = if self.is_launching {
                     &self.launch_message
                 } else if self.launch_complete {
@@ -271,86 +349,107 @@ impl AporiaApp {
                 } else {
                     "▶ Launch"
                 };
-
+                
                 let button_color = if self.is_launching {
                     egui::Color32::from_rgb(80, 80, 100)
                 } else if self.launch_complete {
                     egui::Color32::from_rgb(100, 140, 120)
                 } else {
-                    egui::Color32::from_rgb(140, 100, 180) // Фиолетовый - контрастный к фону
+                    egui::Color32::from_rgb(140, 100, 180)
                 };
-
-                let button = egui::Button::new(egui::RichText::new(button_text).size(18.0))
-                    .min_size(egui::vec2(260.0, 65.0))
-                    .fill(button_color);
-
+                
+                let button = egui::Button::new(
+                    egui::RichText::new(button_text)
+                        .size(18.0)
+                        .color(egui::Color32::from_rgb(255, 255, 255))
+                )
+                .min_size(egui::vec2(280.0, 70.0))
+                .fill(button_color);
+                
                 let response = ui.add(button);
-
+                
                 if response.clicked() && !self.is_launching {
                     self.start_launch();
                 }
-
-                // Прогресс бар
+                
                 if self.is_launching {
                     ui.add_space(12.0);
                     ui.add(egui::ProgressBar::new(self.launch_progress).show_percentage());
                 }
-
-                ui.add_space(40.0);
-
-                // Для release версии
-                if self.selected_version == McVersion::Fabric121 {
-                    ui.label(egui::RichText::new("For release").size(11.0).color(egui::Color32::from_rgb(120, 120, 130)));
-                }
             });
-
+            
             ui.add_space(40.0);
-
-            // Правая панель - changelog
+            
+            // Правая панель - чейнджлог релизов
             ui.vertical(|ui| {
-                ui.add_space(25.0);
-                ui.label(egui::RichText::new("Changelog").size(15.0).strong().color(egui::Color32::from_rgb(200, 200, 210)));
+                ui.add_space(20.0);
+                ui.label(
+                    egui::RichText::new("Releases")
+                        .size(16.0)
+                        .strong()
+                        .color(egui::Color32::from_rgb(200, 200, 210))
+                );
                 ui.add_space(12.0);
-
-                egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
-                    for entry in &self.changelog {
+                
+                egui::ScrollArea::vertical().max_height(500.0).show(ui, |ui| {
+                    for (idx, entry) in self.changelog.iter().enumerate() {
+                        let is_selected = idx == self.current_changelog_index;
+                        let bg_color = if is_selected {
+                            egui::Color32::from_rgba_unmultiplied(50, 50, 70, 150)
+                        } else {
+                            egui::Color32::from_rgba_unmultiplied(30, 30, 45, 100)
+                        };
+                        
+                        ui.painter().rect_filled(
+                            ui.available_rect_before_wrap(),
+                            5.0,
+                            bg_color,
+                        );
+                        
                         ui.vertical(|ui| {
-                            ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new(&entry.version).strong().color(egui::Color32::from_rgb(120, 180, 200)));
-                                ui.label(egui::RichText::new(&entry.date).color(egui::Color32::from_rgb(120, 120, 130)));
-                            });
-
-                            for change in &entry.changes {
-                                ui.label(egui::RichText::new(format!("• {}", change)).size(11.0).color(egui::Color32::from_rgb(180, 180, 190)));
-                            }
+                            ui.label(
+                                egui::RichText::new(&entry.version)
+                                    .strong()
+                                    .color(egui::Color32::from_rgb(120, 180, 200))
+                            );
+                            ui.label(
+                                egui::RichText::new(&entry.date)
+                                    .size(10.0)
+                                    .color(egui::Color32::from_rgb(120, 120, 130))
+                            );
                         });
-                        ui.add_space(12.0);
+                        
+                        ui.add_space(8.0);
                         ui.separator();
                     }
                 });
             });
         });
     }
-
-    /// Экран настроек - контент
+    
+    /// Экран настроек
     fn draw_settings_content(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             ui.add_space(25.0);
-            ui.heading(egui::RichText::new("⚙ Settings").size(24.0).color(egui::Color32::from_rgb(200, 200, 210)));
+            ui.heading(
+                egui::RichText::new("⚙ Settings")
+                    .size(24.0)
+                    .color(egui::Color32::from_rgb(200, 200, 210))
+            );
             ui.separator();
             ui.add_space(25.0);
-
+            
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new("RAM (MB):").size(14.0));
                 ui.add(egui::DragValue::new(&mut self.temp_ram).range(1024..=32768));
             });
-
+            
             ui.add_space(15.0);
-
+            
             ui.checkbox(&mut self.temp_dev_mode, egui::RichText::new("Dev mode (-noverify)").size(14.0));
-
+            
             ui.add_space(40.0);
-
+            
             ui.horizontal(|ui| {
                 if ui.button(egui::RichText::new("Save").size(14.0)).clicked() {
                     self.config.ram_mb = self.temp_ram;
@@ -359,7 +458,7 @@ impl AporiaApp {
                     let _ = self.config.save(&config_path);
                     self.state = AppState::Main;
                 }
-
+                
                 if ui.button(egui::RichText::new("Cancel").size(14.0)).clicked() {
                     self.state = AppState::Main;
                 }
@@ -372,7 +471,7 @@ impl AporiaApp {
         self.is_launching = true;
         self.launch_complete = false;
         self.launch_progress = 0.0;
-        self.launch_message = "Подготовка...".to_string();
+        self.launch_message = "Preparing...".to_string();
         
         let config = self.config.clone();
         let version = self.selected_version.clone();
@@ -382,7 +481,7 @@ impl AporiaApp {
         self.rx = Some(rx);
         
         std::thread::spawn(move || {
-            let _ = tx.send("Проверка Java...".to_string());
+            let _ = tx.send("Checking Java...".to_string());
             
             match version {
                 McVersion::Fabric121 => {
@@ -1002,24 +1101,16 @@ impl eframe::App for AporiaApp {
                             self.launch_progress = 0.1;
                         } else if msg.contains("Fabric") || msg.contains("Cheat") {
                             self.launch_progress = 0.3;
-                        } else if msg.contains("библиотек") {
+                        } else if msg.contains("библиотек") || msg.contains("libraries") {
                             self.launch_progress = 0.5;
-                        } else if msg.contains("модов") {
+                        } else if msg.contains("модов") || msg.contains("mods") {
                             self.launch_progress = 0.7;
-                        } else if msg.contains("natives") || msg.contains("Запуск") {
+                        } else if msg.contains("natives") || msg.contains("Запуск") || msg.contains("Launch") {
                             self.launch_progress = 0.9;
                         }
                     }
                 }
             }
-        }
-        
-        // Топбар для всех экранов кроме Login
-        if self.state != AppState::Login {
-            egui::TopBottomPanel::top("topbar").show(ctx, |ui| {
-                ui.set_height(50.0);
-                self.draw_topbar(ui);
-            });
         }
         
         // Основной контент
@@ -1044,8 +1135,8 @@ fn main() -> eframe::Result<()> {
     
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([900.0, 600.0])
-            .with_min_inner_size([700.0, 500.0]),
+            .with_inner_size([1200.0, 700.0])
+            .with_min_inner_size([900.0, 600.0]),
         ..Default::default()
     };
     
