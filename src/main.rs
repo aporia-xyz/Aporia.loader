@@ -167,15 +167,26 @@ impl AporiaApp {
         self.changelog_loading = true;
         self.changelog = default_changelog();
         
+        log::info!("Loading changelog from GitHub");
+        
         std::thread::spawn(|| {
             let rt = tokio::runtime::Runtime::new().unwrap();
-            let _ = rt.block_on(async {
-                // Загружаем релизы Aporia чита
-                if let Ok(entries) = fetch_aporia_releases().await {
-                    return entries;
+            let result = rt.block_on(async {
+                match fetch_aporia_releases().await {
+                    Ok(entries) => {
+                        log::info!("Successfully loaded {} releases", entries.len());
+                        for entry in &entries {
+                            log::info!("Release: {} ({})", entry.version, entry.date);
+                        }
+                        entries
+                    }
+                    Err(e) => {
+                        log::error!("Failed to load releases: {}", e);
+                        default_changelog()
+                    }
                 }
-                default_changelog()
             });
+            result
         });
         
         self.changelog_loading = false;
@@ -999,20 +1010,28 @@ fn default_changelog() -> Vec<ChangelogEntry> {
 
 /// Загрузить релизы Aporia чита
 async fn fetch_aporia_releases() -> anyhow::Result<Vec<ChangelogEntry>> {
+    log::info!("Fetching Aporia releases from GitHub API");
+    
     let client = reqwest::Client::new();
     
     // Получаем релизы Aporia чита
     let releases_url = "https://api.github.com/repos/dakychan/Aporia/releases";
+    log::info!("Requesting: {}", releases_url);
+    
     let response = client
         .get(releases_url)
         .header("User-Agent", "Aporia-Loader")
         .send()
         .await?;
     
+    log::info!("Response status: {}", response.status());
+    
     let releases: Vec<JsonValue> = response.json().await?;
+    log::info!("Received {} releases", releases.len());
+    
     let mut entries = Vec::new();
     
-    for release in releases.iter().take(15) {
+    for (i, release) in releases.iter().take(15).enumerate() {
         if let (Some(tag), Some(body)) = (
             release.get("tag_name").and_then(|v| v.as_str()),
             release.get("body").and_then(|v| v.as_str()),
@@ -1024,6 +1043,8 @@ async fn fetch_aporia_releases() -> anyhow::Result<Vec<ChangelogEntry>> {
                 .split('T')
                 .next()
                 .unwrap_or("Unknown");
+            
+            log::info!("Release {}: {} ({})", i, tag, published_at);
             
             // Парсим чейнджлог из body
             let changes: Vec<String> = body
@@ -1043,6 +1064,8 @@ async fn fetch_aporia_releases() -> anyhow::Result<Vec<ChangelogEntry>> {
                 .filter(|s| !s.is_empty())
                 .collect();
             
+            log::info!("  Changes: {}", changes.len());
+            
             entries.push(ChangelogEntry {
                 version: tag.to_string(),
                 date: published_at.to_string(),
@@ -1055,7 +1078,10 @@ async fn fetch_aporia_releases() -> anyhow::Result<Vec<ChangelogEntry>> {
         }
     }
     
+    log::info!("Total entries parsed: {}", entries.len());
+    
     Ok(if entries.is_empty() {
+        log::warn!("No entries found, using default changelog");
         default_changelog()
     } else {
         entries
@@ -1098,6 +1124,13 @@ async fn fetch_commits_for_version(branch: &str) -> anyhow::Result<Vec<String>> 
 
 impl eframe::App for AporiaApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Логируем размер окна один раз
+        static LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if !LOGGED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            let available_rect = ctx.available_rect();
+            log::info!("Actual window size: {}x{}", available_rect.width(), available_rect.height());
+        }
+        
         if self.is_launching {
             ctx.request_repaint();
             
@@ -1145,16 +1178,23 @@ impl eframe::App for AporiaApp {
 fn main() -> eframe::Result<()> {
     env_logger::init();
     
+    log::info!("Starting Aporia Loader");
+    
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1200.0, 700.0])
-            .with_min_inner_size([900.0, 600.0]),
+            .with_inner_size([1600.0, 900.0])
+            .with_min_inner_size([1200.0, 700.0]),
         ..Default::default()
     };
+    
+    log::info!("Window size: 1600x900");
     
     eframe::run_native(
         "Aporia Loader",
         options,
-        Box::new(|cc| Ok(Box::new(AporiaApp::new(cc)))),
+        Box::new(|cc| {
+            log::info!("Creating app instance");
+            Ok(Box::new(AporiaApp::new(cc)))
+        }),
     )
 }
