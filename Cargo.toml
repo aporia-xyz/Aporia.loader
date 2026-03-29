@@ -1,0 +1,42 @@
+[package]
+name = "aporia-loader"
+version = "0.2.0"
+edition = "2021"
+authors = ["Aporia Team"]
+description = "Cross-platform Minecraft Fabric Loader with GUI"
+
+[dependencies]
+# GUI - кроссплатформенный egui/eframe
+eframe = { version = "0.31", default-features = false, features = ["default_fonts", "glow", "persistence"] }
+egui = "0.31"
+
+# HTTP/Download - без сжатия чтобы избежать zstd-sys
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls", "blocking"] }
+tokio = { version = "1", features = ["fs", "rt-multi-thread", "sync"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Async runtime
+futures = "0.3"
+
+# Filesystem
+dirs = "6.0"
+walkdir = "2.5"
+
+# Utils
+anyhow = "1.0"
+log = "0.4"
+env_logger = "0.11"
+urlencoding = "2.1"
+zip = { version = "2.4", default-features = false, features = ["deflate"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
+
+[[bin]]
+name = "aporia-loader"
+path = "src/main.rs"

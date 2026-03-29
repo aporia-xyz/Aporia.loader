@@ -1,0 +1,977 @@
+//! Aporia Loader - Cross-platform Minecraft Loader
+//! 
+//! Кроссплатформенный лаунчер с GUI для Minecraft.
+
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod config;
+mod downloader;
+mod utils;
+
+use std::path::PathBuf;
+use std::process::Command;
+use std::fs;
+use std::sync::mpsc;
+
+use eframe::egui;
+use serde_json::Value as JsonValue;
+
+use config::Config;
+use downloader::{Downloader, Mod as ModInfo};
+
+/// Версия лаунчера
+const VERSION: &str = "0.3.0";
+
+/// Доступные версии Minecraft
+#[derive(Debug, Clone, PartialEq)]
+enum McVersion {
+    Fabric121,
+    CheatLatest,
+}
+
+impl McVersion {
+    fn name(&self) -> &'static str {
+        match self {
+            McVersion::Fabric121 => "Fabric 1.21.11 (Modded)",
+            McVersion::CheatLatest => "Cheat Latest (Standalone)",
+        }
+    }
+    
+    fn id(&self) -> &'static str {
+        match self {
+            McVersion::Fabric121 => "fabric-1.21.11",
+            McVersion::CheatLatest => "cheat-latest",
+        }
+    }
+}
+
+/// Состояния приложения
+#[derive(PartialEq, Clone)]
+enum AppState {
+    Login,
+    Main,
+    Settings,
+}
+
+/// Changelog entry
+#[derive(Debug, Clone)]
+struct ChangelogEntry {
+    version: String,
+    date: String,
+    changes: Vec<String>,
+}
+
+/// Главное приложение
+struct AporiaApp {
+    state: AppState,
+    config: Config,
+    selected_version: McVersion,
+    
+    // Login screen
+    username_input: String,
+    
+    // Main screen
+    changelog: Vec<ChangelogEntry>,
+    changelog_loading: bool,
+    
+    // Launch status
+    is_launching: bool,
+    launch_progress: f32,
+    launch_message: String,
+    launch_complete: bool,
+    
+    // Settings
+    temp_ram: u32,
+    temp_dev_mode: bool,
+    
+    // Async
+    rx: Option<mpsc::Receiver<String>>,
+    mods: Vec<ModInfo>,
+}
+
+impl Default for AporiaApp {
+    fn default() -> Self {
+        let config = Config::default();
+        
+        Self {
+            state: AppState::Login,
+            config: config.clone(),
+            selected_version: McVersion::Fabric121,
+            username_input: config.username.clone(),
+            changelog: Vec::new(),
+            changelog_loading: false,
+            is_launching: false,
+            launch_progress: 0.0,
+            launch_message: String::new(),
+            launch_complete: false,
+            temp_ram: config.ram_mb,
+            temp_dev_mode: config.dev_mode,
+            rx: None,
+            mods: vec![
+                ModInfo {
+                    name: "Mod Menu".to_string(),
+                    url: "https://cdn.modrinth.com/data/mOgUt4GM/versions/JWQVh32x/modmenu-17.0.0-beta.2.jar".to_string(),
+                    selected: true,
+                },
+                ModInfo {
+                    name: "3D Skin Layers".to_string(),
+                    url: "https://cdn.modrinth.com/data/zV5r3pPn/versions/JS9deRtw/skinlayers3d-fabric-1.10.2-mc1.21.11.jar".to_string(),
+                    selected: true,
+                },
+                ModInfo {
+                    name: "Sound Physics Remastered".to_string(),
+                    url: "https://cdn.modrinth.com/data/qyVF9oeo/versions/pfqxi9qs/sound-physics-remastered-fabric-1.21.11-1.5.1.jar".to_string(),
+                    selected: true,
+                },
+                ModInfo {
+                    name: "Cloth Config".to_string(),
+                    url: "https://cdn.modrinth.com/data/9s6osm5g/versions/xuX40TN5/cloth-config-21.11.153-fabric.jar".to_string(),
+                    selected: true,
+                },
+            ],
+        }
+    }
+}
+
+impl AporiaApp {
+    fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        // Настройка стилей
+        let mut style = (*cc.egui_ctx.style()).clone();
+        style.spacing.item_spacing = egui::vec2(8.0, 6.0);
+        style.spacing.button_padding = egui::vec2(12.0, 8.0);
+        style.visuals.button_frame = true;
+        cc.egui_ctx.set_style(style);
+        
+        // Загружаем changelog
+        let mut app = Self::default();
+        app.load_changelog();
+        
+        app
+    }
+    
+    /// Загрузка changelog из GitHub
+    fn load_changelog(&mut self) {
+        self.changelog_loading = true;
+        
+        std::thread::spawn(move || {
+            // Пытаемся загрузить с GitHub
+            let client = reqwest::blocking::Client::new();
+            
+            if let Ok(response) = client
+                .get("https://raw.githubusercontent.com/aporia-xyz/Aporia.loader/main/CHANGELOG.md")
+                .send()
+            {
+                if let Ok(text) = response.text() {
+                    // Парсим changelog
+                    let entries = parse_changelog(&text);
+                    return entries;
+                }
+            }
+            
+            // Дефолтный changelog
+            vec![
+                ChangelogEntry {
+                    version: "0.3.0".to_string(),
+                    date: "2026-03-29".to_string(),
+                    changes: vec![
+                        "Полный редизайн GUI".to_string(),
+                        "Добавлена версия Cheat".to_string(),
+                        "Улучшена производительность".to_string(),
+                    ],
+                },
+                ChangelogEntry {
+                    version: "0.2.0".to_string(),
+                    date: "2026-03-28".to_string(),
+                    changes: vec![
+                        "Переписано на Rust".to_string(),
+                        "Кроссплатформенный GUI".to_string(),
+                    ],
+                },
+            ]
+        });
+        
+        // Дефолтный changelog пока
+        self.changelog = vec![
+            ChangelogEntry {
+                version: "0.3.0".to_string(),
+                date: "2026-03-29".to_string(),
+                changes: vec![
+                    "Полный редизайн GUI".to_string(),
+                    "Добавлена версия Cheat".to_string(),
+                    "Улучшена производительность".to_string(),
+                ],
+            },
+            ChangelogEntry {
+                version: "0.2.0".to_string(),
+                date: "2026-03-28".to_string(),
+                changes: vec![
+                    "Переписано на Rust".to_string(),
+                    "Кроссплатформенный GUI".to_string(),
+                ],
+            },
+        ];
+        
+        self.changelog_loading = false;
+    }
+    
+    /// Отрисовка топбара
+    fn draw_topbar(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            // Логотип слева
+            ui.label(egui::RichText::new("Aporia.cc").size(20.0).strong().color(egui::Color32::from_rgb(0, 200, 200)));
+            
+            ui.add_space(20.0);
+            
+            // Добро пожаловать
+            if !self.config.username.is_empty() {
+                ui.label(egui::RichText::new(format!("Добро пожаловать, {}", self.config.username)).size(14.0));
+            }
+            
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                // Кнопка настроек справа
+                if ui.button("⚙️").clicked() {
+                    self.state = AppState::Settings;
+                }
+                
+                // Username справа
+                ui.label(egui::RichText::new(&self.config.username).size(14.0));
+            });
+        });
+    }
+    
+    /// Экран логина
+    fn draw_login(&mut self, ui: &mut egui::Ui) {
+        ui.vertical_centered(|ui| {
+            ui.add_space(50.0);
+            
+            ui.label(egui::RichText::new("Aporia.cc").size(48.0).strong().color(egui::Color32::from_rgb(0, 200, 200)));
+            ui.label(egui::RichText::new("Launcher").size(24.0).color(egui::Color32::GRAY));
+            
+            ui.add_space(50.0);
+            
+            ui.label(egui::RichText::new("Введите ваш никнейм").size(16.0));
+            ui.add_space(10.0);
+            
+            let text_edit = egui::TextEdit::singleline(&mut self.username_input)
+                .hint_text("Никнейм")
+                .desired_width(250.0)
+                .font(egui::TextStyle::Heading);
+            
+            if ui.add(text_edit).lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                self.complete_login();
+            }
+            
+            ui.add_space(20.0);
+            
+            let button = egui::Button::new(egui::RichText::new("Продолжить").size(18.0))
+                .min_size(egui::vec2(200.0, 45.0));
+            
+            if ui.add(button).clicked() {
+                self.complete_login();
+            }
+        });
+    }
+    
+    fn complete_login(&mut self) {
+        if !self.username_input.trim().is_empty() {
+            self.config.username = self.username_input.trim().to_string();
+            let config_path = self.config.config_path();
+            let _ = self.config.save(&config_path);
+            self.state = AppState::Main;
+        }
+    }
+    
+    /// Главный экран - контент
+    fn draw_main_content(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            // Левая панель - версия и запуск
+            ui.vertical(|ui| {
+                ui.add_space(20.0);
+
+                // Выбор версии
+                ui.label(egui::RichText::new("Версия").size(16.0).strong());
+                ui.add_space(10.0);
+
+                egui::ComboBox::from_label("")
+                    .selected_text(self.selected_version.name())
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.selected_version, McVersion::Fabric121, "Fabric 1.21.11");
+                        ui.selectable_value(&mut self.selected_version, McVersion::CheatLatest, "Cheat Latest");
+                    });
+
+                ui.add_space(30.0);
+
+                // Кнопка запуска
+                let button_text = if self.is_launching {
+                    &self.launch_message
+                } else if self.launch_complete {
+                    "✓ Запущено"
+                } else {
+                    "▶ Запустить"
+                };
+
+                let button = egui::Button::new(egui::RichText::new(button_text).size(20.0))
+                    .min_size(egui::vec2(250.0, 60.0))
+                    .fill(if self.is_launching {
+                        egui::Color32::GRAY
+                    } else {
+                        egui::Color32::from_rgb(0, 200, 100)
+                    });
+
+                let response = ui.add(button);
+
+                if response.clicked() && !self.is_launching {
+                    self.start_launch();
+                }
+
+                // Прогресс бар
+                if self.is_launching {
+                    ui.add_space(10.0);
+                    ui.add(egui::ProgressBar::new(self.launch_progress).show_percentage());
+                }
+
+                ui.add_space(30.0);
+
+                // Для release версии
+                if self.selected_version == McVersion::Fabric121 {
+                    ui.label(egui::RichText::new("For release").size(12.0).color(egui::Color32::GRAY));
+                }
+            });
+
+            ui.add_space(30.0);
+
+            // Правая панель - changelog
+            ui.vertical(|ui| {
+                ui.add_space(20.0);
+                ui.label(egui::RichText::new("Changelog").size(16.0).strong());
+                ui.add_space(10.0);
+
+                egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
+                    for entry in &self.changelog {
+                        ui.vertical(|ui| {
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new(&entry.version).strong().color(egui::Color32::from_rgb(0, 200, 200)));
+                                ui.label(egui::RichText::new(&entry.date).color(egui::Color32::GRAY));
+                            });
+
+                            for change in &entry.changes {
+                                ui.label(egui::RichText::new(format!("• {}", change)).size(12.0));
+                            }
+                        });
+                        ui.add_space(10.0);
+                        ui.separator();
+                    }
+                });
+            });
+        });
+    }
+
+    /// Экран настроек - контент
+    fn draw_settings_content(&mut self, ui: &mut egui::Ui) {
+        ui.vertical(|ui| {
+            ui.add_space(20.0);
+            ui.heading("⚙️ Настройки");
+            ui.separator();
+            ui.add_space(20.0);
+
+            ui.horizontal(|ui| {
+                ui.label("RAM (MB):");
+                ui.add(egui::DragValue::new(&mut self.temp_ram).range(1024..=32768));
+            });
+
+            ui.add_space(10.0);
+
+            ui.checkbox(&mut self.temp_dev_mode, "Dev режим (-noverify)");
+
+            ui.add_space(30.0);
+
+            ui.horizontal(|ui| {
+                if ui.button("Сохранить").clicked() {
+                    self.config.ram_mb = self.temp_ram;
+                    self.config.dev_mode = self.temp_dev_mode;
+                    let config_path = self.config.config_path();
+                    let _ = self.config.save(&config_path);
+                    self.state = AppState::Main;
+                }
+
+                if ui.button("Отмена").clicked() {
+                    self.state = AppState::Main;
+                }
+            });
+        });
+    }
+    
+    /// Начать запуск
+    fn start_launch(&mut self) {
+        self.is_launching = true;
+        self.launch_complete = false;
+        self.launch_progress = 0.0;
+        self.launch_message = "Подготовка...".to_string();
+        
+        let config = self.config.clone();
+        let version = self.selected_version.clone();
+        let mods = self.mods.clone();
+        
+        let (tx, rx) = mpsc::channel::<String>();
+        self.rx = Some(rx);
+        
+        std::thread::spawn(move || {
+            let _ = tx.send("Проверка Java...".to_string());
+            
+            match version {
+                McVersion::Fabric121 => {
+                    launch_fabric(&config, &mods, &tx);
+                }
+                McVersion::CheatLatest => {
+                    launch_cheat(&config, &tx);
+                }
+            }
+            
+            let _ = tx.send("__COMPLETE__".to_string());
+        });
+    }
+}
+
+/// Запуск Fabric версии
+fn launch_fabric(config: &Config, mods: &[ModInfo], tx: &mpsc::Sender<String>) {
+    let install_path = &config.install_path;
+    
+    // Проверяем Java
+    let java_path = ensure_java(install_path, tx);
+    
+    let _ = tx.send("Загрузка Fabric...".to_string());
+    
+    // Загружаем Fabric jar и json
+    let versions_path = PathBuf::from(install_path)
+        .join("versions")
+        .join("Fabric 1.21.11");
+    
+    let _ = fs::create_dir_all(&versions_path);
+    
+    let jar_path = versions_path.join("Fabric 1.21.11.jar");
+    let json_path = versions_path.join("Fabric 1.21.11.json");
+    
+    if !jar_path.exists() {
+        let url = "https://raw.githubusercontent.com/aporia-xyz/Aporia.loader/refs/heads/main/versions/Fabric%201.21.11/Fabric%201.21.11.jar";
+        let _ = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(Downloader::download(url, jar_path.to_str().unwrap()));
+    }
+    
+    if !json_path.exists() {
+        let url = "https://raw.githubusercontent.com/aporia-xyz/Aporia.loader/refs/heads/main/versions/Fabric%201.21.11/Fabric%201.21.11.json";
+        let _ = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(Downloader::download(url, json_path.to_str().unwrap()));
+    }
+    
+    let _ = tx.send("Загрузка библиотек...".to_string());
+    let _ = load_libraries(config, &json_path, tx);
+    
+    let _ = tx.send("Загрузка модов...".to_string());
+    
+    let mods_path = PathBuf::from(install_path).join("game").join("mods");
+    let _ = fs::create_dir_all(&mods_path);
+    
+    // Fabric API
+    let fabric_api_path = mods_path.join("fabric-api.jar");
+    if !fabric_api_path.exists() {
+        let url = "https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.141.2%2B1.21.11/fabric-api-0.141.2%2B1.21.11.jar";
+        let _ = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(Downloader::download(url, fabric_api_path.to_str().unwrap()));
+    }
+    
+    // Моды
+    let selected_mods: Vec<_> = mods.iter().filter(|m| m.selected).cloned().collect();
+    if !selected_mods.is_empty() {
+        let _ = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(Downloader::download_mods(mods_path.to_str().unwrap(), &selected_mods));
+    }
+    
+    let _ = tx.send("Распаковка natives...".to_string());
+    let _ = extract_natives(config);
+    
+    let _ = tx.send("Запуск...".to_string());
+    let _ = launch_minecraft_fabric(config, &java_path);
+}
+
+/// Запуск Cheat версии
+fn launch_cheat(config: &Config, tx: &mpsc::Sender<String>) {
+    let install_path = &config.install_path;
+    
+    let _ = tx.send("Проверка Java...".to_string());
+    let java_path = ensure_java(install_path, tx);
+    
+    let _ = tx.send("Загрузка Cheat клиента...".to_string());
+    
+    // Загружаем Cheat клиент
+    let versions_path = PathBuf::from(install_path)
+        .join("versions")
+        .join("Aporia.client");
+    
+    let _ = fs::create_dir_all(&versions_path);
+    
+    let jar_path = versions_path.join("Aporia.client.jar");
+    
+    if !jar_path.exists() {
+        // URL для cheat версии - нужно указать актуальный
+        let url = "https://raw.githubusercontent.com/aporia-xyz/Aporia.loader/refs/heads/main/versions/Aporia.client/Aporia.client.jar";
+        let _ = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(Downloader::download(url, jar_path.to_str().unwrap()));
+    }
+    
+    let _ = tx.send("Запуск...".to_string());
+    let _ = launch_minecraft_cheat(config, &java_path, &jar_path);
+}
+
+/// Обеспечить наличие Java
+fn ensure_java(install_path: &str, tx: &mpsc::Sender<String>) -> String {
+    let java_dir = PathBuf::from(install_path).join("java");
+    
+    #[cfg(target_os = "windows")]
+    let java_exe = java_dir.join("jdk-26").join("bin").join("java.exe");
+    
+    #[cfg(not(target_os = "windows"))]
+    let java_exe = java_dir.join("jdk-26").join("bin").join("java");
+    
+    if java_exe.exists() {
+        let _ = tx.send("Java найдена".to_string());
+        return java_exe.to_string_lossy().to_string();
+    }
+    
+    let _ = tx.send("Загрузка Java 26...".to_string());
+    
+    #[cfg(target_os = "windows")]
+    let java_url = "https://download.java.net/java/GA/jdk26/c3cc523845074aa0af4f5e1e1ed4151d/35/GPL/openjdk-26_windows-x64_bin.zip";
+    
+    #[cfg(target_os = "macos")]
+    let java_url = "https://download.java.net/java/GA/jdk26/c3cc523845074aa0af4f5e1e1ed4151d/35/GPL/openjdk-26_osx-x64_bin.tar.gz";
+    
+    #[cfg(target_os = "linux")]
+    let java_url = "https://download.java.net/java/GA/jdk26/c3cc523845074aa0af4f5e1e1ed4151d/35/GPL/openjdk-26_linux-x64_bin.tar.gz";
+    
+    let _ = fs::create_dir_all(&java_dir);
+    let archive_path = java_dir.join("java-26.zip");
+    
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    if rt.block_on(Downloader::download(java_url, archive_path.to_str().unwrap())).is_ok() {
+        let _ = tx.send("Распаковка Java...".to_string());
+        
+        #[cfg(target_os = "windows")]
+        {
+            let _ = Command::new("powershell")
+                .args([
+                    "-Command",
+                    &format!(
+                        "Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('{}', '{}')",
+                        archive_path.display(),
+                        java_dir.display()
+                    )
+                ])
+                .output();
+        }
+        
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        {
+            let _ = Command::new("tar")
+                .args(["-xzf", archive_path.to_str().unwrap(), "-C", java_dir.to_str().unwrap()])
+                .output();
+        }
+        
+        let _ = fs::remove_file(archive_path);
+    }
+    
+    if java_exe.exists() {
+        java_exe.to_string_lossy().to_string()
+    } else {
+        "java".to_string()
+    }
+}
+
+/// Загрузить библиотеки из JSON
+fn load_libraries(config: &Config, json_path: &PathBuf, tx: &mpsc::Sender<String>) -> anyhow::Result<()> {
+    let content = fs::read_to_string(json_path)?;
+    let json: JsonValue = serde_json::from_str(&content)?;
+    
+    let libs_path = PathBuf::from(&config.install_path).join("libraries");
+    let os_name = utils::get_os_name();
+    
+    if let Some(libraries) = json.get("libraries").and_then(|v| v.as_array()) {
+        for lib in libraries {
+            if let Some(name) = lib.get("name").and_then(|v| v.as_str()) {
+                if name.contains("ru.legacylauncher") {
+                    continue;
+                }
+                
+                if let Some(rules) = lib.get("rules").and_then(|v| v.as_array()) {
+                    let mut allowed = false;
+                    for rule in rules {
+                        if let Some(action) = rule.get("action").and_then(|v| v.as_str()) {
+                            if action == "allow" {
+                                if let Some(os_rule) = rule.get("os") {
+                                    if let Some(rule_os) = os_rule.get("name").and_then(|v| v.as_str()) {
+                                        if rule_os == os_name {
+                                            allowed = true;
+                                        }
+                                    }
+                                } else {
+                                    allowed = true;
+                                }
+                            }
+                        }
+                    }
+                    if !allowed {
+                        continue;
+                    }
+                }
+                
+                let base_url = lib.get("url")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("https://libraries.minecraft.net/");
+                
+                let parts: Vec<&str> = name.split(':').collect();
+                if parts.len() < 3 {
+                    continue;
+                }
+                
+                let group = parts[0];
+                let artifact = parts[1];
+                let version = parts[2];
+                let classifier = if parts.len() > 3 { parts[3] } else { "" };
+                
+                let group_path = group.replace('.', "/");
+                let mut filename = format!("{}-{}", artifact, version);
+                if !classifier.is_empty() {
+                    filename.push_str(&format!("-{}", classifier));
+                }
+                filename.push_str(".jar");
+                
+                let url = format!("{}/{}/{}/{}/{}", base_url, group_path, artifact, version, filename);
+                let local_path = libs_path.join(&group_path).join(artifact).join(version).join(&filename);
+                
+                if !local_path.exists() {
+                    if let Some(parent) = local_path.parent() {
+                        let _ = fs::create_dir_all(parent);
+                    }
+                    
+                    let _ = tokio::runtime::Runtime::new()
+                        .unwrap()
+                        .block_on(Downloader::download(&url, local_path.to_str().unwrap()));
+                }
+            }
+        }
+    }
+    
+    // Загружаем assets index
+    if let Some(asset_index) = json.get("assetIndex") {
+        if let (Some(url), Some(id)) = (
+            asset_index.get("url").and_then(|v| v.as_str()),
+            asset_index.get("id").and_then(|v| v.as_str())
+        ) {
+            let index_path = PathBuf::from(&config.install_path)
+                .join("assets")
+                .join("indexes")
+                .join(format!("{}.json", id));
+            
+            if !index_path.exists() {
+                let _ = fs::create_dir_all(index_path.parent().unwrap());
+                let _ = tokio::runtime::Runtime::new()
+                    .unwrap()
+                    .block_on(Downloader::download(url, index_path.to_str().unwrap()));
+            }
+            
+            if let Ok(index_content) = fs::read_to_string(&index_path) {
+                if let Ok(index_json) = serde_json::from_str::<JsonValue>(&index_content) {
+                    if let Some(objects) = index_json.get("objects").and_then(|v| v.as_object()) {
+                        let total = objects.len();
+                        let _ = tx.send(format!("Ассеты: {}", total));
+                        
+                        for (i, (_, value)) in objects.iter().enumerate() {
+                            if let Some(hash) = value.get("hash").and_then(|v| v.as_str()) {
+                                let subdir = &hash[0..2];
+                                let object_path = PathBuf::from(&config.install_path)
+                                    .join("assets")
+                                    .join("objects")
+                                    .join(subdir)
+                                    .join(hash);
+                                
+                                if !object_path.exists() {
+                                    if let Some(parent) = object_path.parent() {
+                                        let _ = fs::create_dir_all(parent);
+                                    }
+                                    
+                                    let url = format!("https://resources.download.minecraft.net/{}/{}", subdir, hash);
+                                    let _ = tokio::runtime::Runtime::new()
+                                        .unwrap()
+                                        .block_on(Downloader::download(&url, object_path.to_str().unwrap()));
+                                }
+                            }
+                            
+                            if i % 50 == 0 {
+                                let _ = tx.send(format!("Ассеты: {}/{}", i, total));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+/// Распаковать natives
+fn extract_natives(config: &Config) -> anyhow::Result<()> {
+    let libs_path = PathBuf::from(&config.install_path).join("libraries");
+    let natives_dir = PathBuf::from(&config.install_path)
+        .join("versions")
+        .join("Fabric 1.21.11")
+        .join("natives");
+    
+    let _ = fs::create_dir_all(&natives_dir);
+    
+    let native_pattern = match utils::get_os_name() {
+        "windows" => "natives-windows",
+        "osx" => "natives-macos",
+        _ => "natives-linux",
+    };
+    
+    if libs_path.exists() {
+        for entry in walkdir::WalkDir::new(&libs_path) {
+            if let Ok(entry) = entry {
+                if entry.file_type().is_file() {
+                    if entry.path().extension().map(|e| e == "jar").unwrap_or(false) {
+                        if entry.path().file_name()
+                            .and_then(|n| n.to_str())
+                            .map(|n| n.contains(native_pattern))
+                            .unwrap_or(false)
+                        {
+                            let _ = extract_zip(entry.path(), &natives_dir);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+/// Распаковать ZIP
+fn extract_zip(zip_path: &std::path::Path, dest_dir: &std::path::Path) -> anyhow::Result<()> {
+    let file = fs::File::open(zip_path)?;
+    let mut archive = zip::ZipArchive::new(file)?;
+    
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i)?;
+        let outpath = dest_dir.join(file.mangled_name());
+        
+        if file.name().ends_with('/') {
+            let _ = fs::create_dir_all(&outpath);
+        } else {
+            if let Some(parent) = outpath.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            let mut outfile = fs::File::create(&outpath)?;
+            std::io::copy(&mut file, &mut outfile)?;
+        }
+    }
+    
+    Ok(())
+}
+
+/// Запуск Minecraft Fabric
+fn launch_minecraft_fabric(config: &Config, java_path: &str) -> anyhow::Result<()> {
+    let game_dir = PathBuf::from(&config.install_path).join("game");
+    let libs_path = PathBuf::from(&config.install_path).join("libraries");
+    let assets_path = PathBuf::from(&config.install_path).join("assets");
+    let natives_dir = PathBuf::from(&config.install_path)
+        .join("versions")
+        .join("Fabric 1.21.11")
+        .join("natives");
+    
+    let _ = fs::create_dir_all(&game_dir);
+    
+    let mut classpath = vec![
+        PathBuf::from(&config.install_path)
+            .join("versions")
+            .join("Fabric 1.21.11")
+            .join("Fabric 1.21.11.jar")
+    ];
+    
+    if libs_path.exists() {
+        for entry in walkdir::WalkDir::new(&libs_path) {
+            if let Ok(entry) = entry {
+                if entry.file_type().is_file() {
+                    if entry.path().extension().map(|e| e == "jar").unwrap_or(false) {
+                        classpath.push(entry.path().to_path_buf());
+                    }
+                }
+            }
+        }
+    }
+    
+    let classpath_str = classpath.iter()
+        .filter_map(|p| p.to_str())
+        .collect::<Vec<_>>()
+        .join(if cfg!(windows) { ";" } else { ":" });
+    
+    let mut cmd = Command::new(java_path);
+    cmd.arg(format!("-Xmx{}M", config.ram_mb));
+    cmd.arg(format!("-Djava.library.path={}", natives_dir.display()));
+    
+    if config.dev_mode {
+        cmd.arg("-noverify");
+    }
+    
+    cmd.arg("net.fabricmc.loader.impl.launch.knot.KnotClient");
+    cmd.arg("--gameDir").arg(&game_dir);
+    cmd.arg("--version").arg("Fabric 1.21.11");
+    cmd.arg("--assetsDir").arg(&assets_path);
+    cmd.arg("--assetIndex").arg("29");
+    cmd.arg("--username").arg(&config.username);
+    
+    cmd.env("CLASSPATH", &classpath_str);
+    cmd.spawn()?;
+    
+    Ok(())
+}
+
+/// Запуск Minecraft Cheat (standalone)
+fn launch_minecraft_cheat(config: &Config, java_path: &str, jar_path: &PathBuf) -> anyhow::Result<()> {
+    let game_dir = PathBuf::from(&config.install_path).join("game");
+    let assets_path = PathBuf::from(&config.install_path).join("assets");
+    
+    let _ = fs::create_dir_all(&game_dir);
+    
+    let classpath_str = jar_path.to_str().unwrap();
+    
+    let mut cmd = Command::new(java_path);
+    cmd.arg(format!("-Xmx{}M", config.ram_mb));
+    
+    if config.dev_mode {
+        cmd.arg("-noverify");
+    }
+    
+    // Запуск как standalone без assetIndex
+    cmd.arg("-cp").arg(classpath_str);
+    cmd.arg("net.minecraft.client.main.Main");
+    cmd.arg("--version").arg("mcp");
+    cmd.arg("--accessToken").arg("0");
+    cmd.arg("--assetsDir").arg(&assets_path);
+    cmd.arg("--assetIndex").arg("29");
+    cmd.arg("--userProperties").arg("{}");
+    cmd.arg("--username").arg(&config.username);
+    
+    cmd.env("CLASSPATH", classpath_str);
+    cmd.spawn()?;
+    
+    Ok(())
+}
+
+/// Парсинг changelog
+fn parse_changelog(text: &str) -> Vec<ChangelogEntry> {
+    let mut entries = Vec::new();
+    let mut current_entry: Option<ChangelogEntry> = None;
+    
+    for line in text.lines() {
+        let line = line.trim();
+        
+        if line.starts_with("## ") {
+            if let Some(entry) = current_entry.take() {
+                entries.push(entry);
+            }
+            
+            let parts: Vec<&str> = line[3..].split_whitespace().collect();
+            current_entry = Some(ChangelogEntry {
+                version: parts[0].to_string(),
+                date: parts.get(1).unwrap_or(&"").to_string(),
+                changes: Vec::new(),
+            });
+        } else if line.starts_with("- ") && current_entry.is_some() {
+            if let Some(ref mut entry) = current_entry {
+                entry.changes.push(line[2..].to_string());
+            }
+        }
+    }
+    
+    if let Some(entry) = current_entry {
+        entries.push(entry);
+    }
+    
+    entries
+}
+
+impl eframe::App for AporiaApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.is_launching {
+            ctx.request_repaint();
+            
+            if let Some(rx) = &self.rx {
+                while let Ok(msg) = rx.try_recv() {
+                    if msg == "__COMPLETE__" {
+                        self.launch_complete = true;
+                        self.is_launching = false;
+                    } else {
+                        self.launch_message = msg.clone();
+                        
+                        if msg.contains("Java") {
+                            self.launch_progress = 0.1;
+                        } else if msg.contains("Fabric") || msg.contains("Cheat") {
+                            self.launch_progress = 0.3;
+                        } else if msg.contains("библиотек") {
+                            self.launch_progress = 0.5;
+                        } else if msg.contains("модов") {
+                            self.launch_progress = 0.7;
+                        } else if msg.contains("natives") || msg.contains("Запуск") {
+                            self.launch_progress = 0.9;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Топбар для всех экранов кроме Login
+        if self.state != AppState::Login {
+            egui::TopBottomPanel::top("topbar").show(ctx, |ui| {
+                ui.set_height(50.0);
+                self.draw_topbar(ui);
+            });
+        }
+        
+        // Основной контент
+        egui::CentralPanel::default().show(ctx, |ui| {
+            match self.state {
+                AppState::Login => {
+                    self.draw_login(ui);
+                }
+                AppState::Main => {
+                    self.draw_main_content(ui);
+                }
+                AppState::Settings => {
+                    self.draw_settings_content(ui);
+                }
+            }
+        });
+    }
+}
+
+fn main() -> eframe::Result<()> {
+    env_logger::init();
+    
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([900.0, 600.0])
+            .with_min_inner_size([700.0, 500.0]),
+        ..Default::default()
+    };
+    
+    eframe::run_native(
+        "Aporia Loader",
+        options,
+        Box::new(|cc| Ok(Box::new(AporiaApp::new(cc)))),
+    )
+}
