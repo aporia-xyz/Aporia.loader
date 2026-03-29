@@ -37,16 +37,46 @@ pub struct DownloadStats {
 pub struct Downloader;
 
 impl Downloader {
-    /// Загрузить файл по URL с прогрессом
+    /// Загрузить файл по URL с прогрессом и retry
     pub async fn download(url: &str, output: &str) -> anyhow::Result<u64> {
+        let max_retries = 3;
+        let mut attempt = 0;
+        
+        loop {
+            attempt += 1;
+            log::info!("Download attempt {}/{} from: {}", attempt, max_retries, url);
+            
+            match Self::download_internal(url, output).await {
+                Ok(size) => {
+                    log::info!("Download successful: {} bytes", size);
+                    return Ok(size);
+                }
+                Err(e) => {
+                    log::error!("Download attempt {} failed: {}", attempt, e);
+                    
+                    if attempt >= max_retries {
+                        return Err(e);
+                    }
+                    
+                    // Удаляем частичный файл перед retry
+                    let _ = tokio::fs::remove_file(output).await;
+                    
+                    // Ждём перед retry
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                }
+            }
+        }
+    }
+    
+    /// Внутренняя функция загрузки
+    async fn download_internal(url: &str, output: &str) -> anyhow::Result<u64> {
         let client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::limited(10))
             .danger_accept_invalid_certs(true)
+            .timeout(std::time::Duration::from_secs(300)) // 5 минут таймаут
             .build()
             .context("Failed to create HTTP client")?;
 
-        log::info!("Starting download from: {}", url);
-        
         let response = client
             .get(url)
             .send()
@@ -58,7 +88,7 @@ impl Downloader {
         }
 
         let total_size = response.content_length().unwrap_or(0);
-        log::info!("Total size: {} bytes", total_size);
+        log::info!("Total size: {} bytes ({:.1}MB)", total_size, total_size as f64 / 1_000_000.0);
         
         // Создаем директорию если нужно
         if let Some(parent) = Path::new(output).parent() {
@@ -73,6 +103,7 @@ impl Downloader {
         let mut stream = response.bytes_stream();
         let mut downloaded: u64 = 0;
         let mut chunk_count = 0;
+        let mut last_log = std::time::Instant::now();
         
         use futures::stream::StreamExt;
         
@@ -86,13 +117,16 @@ impl Downloader {
                         Ok(_) => {
                             downloaded += chunk_size;
                             
-                            // Логируем прогресс каждые 50MB
-                            if total_size > 0 && downloaded % (50 * 1024 * 1024) < chunk_size {
-                                let percent = (downloaded as f64 / total_size as f64 * 100.0) as u32;
-                                log::info!("Download progress: {}% ({}/{}MB)", 
-                                    percent, 
-                                    downloaded / 1_000_000, 
-                                    total_size / 1_000_000);
+                            // Логируем прогресс каждую секунду
+                            if last_log.elapsed().as_secs() >= 1 {
+                                if total_size > 0 {
+                                    let percent = (downloaded as f64 / total_size as f64 * 100.0) as u32;
+                                    log::info!("Progress: {}% ({:.1}/{:.1}MB)", 
+                                        percent, 
+                                        downloaded as f64 / 1_000_000.0, 
+                                        total_size as f64 / 1_000_000.0);
+                                }
+                                last_log = std::time::Instant::now();
                             }
                         }
                         Err(e) => {
@@ -111,15 +145,20 @@ impl Downloader {
         // Flush и sync для гарантии записи
         file.flush().await.context("Failed to flush file")?;
         file.sync_all().await.context("Failed to sync file")?;
+        drop(file);
         
         log::info!("Download complete: {} bytes in {} chunks", downloaded, chunk_count);
         
         // Проверяем что файл действительно создан
         let metadata = tokio::fs::metadata(output).await.context("Failed to get file metadata")?;
-        log::info!("File size on disk: {} bytes", metadata.len());
+        log::info!("File size on disk: {:.1}MB", metadata.len() as f64 / 1_000_000.0);
         
         if metadata.len() == 0 {
             anyhow::bail!("Downloaded file is empty!");
+        }
+        
+        if metadata.len() < downloaded {
+            anyhow::bail!("File size mismatch: expected {}, got {}", downloaded, metadata.len());
         }
         
         Ok(downloaded)
