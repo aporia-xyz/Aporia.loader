@@ -1,0 +1,270 @@
+{
+  "id": "Aporia.client",
+  "family": "unknown",
+  "time": "2026-03-25T17:23:15.541Z",
+  "releaseTime": "2025-12-09T12:23:30Z",
+  "type": "release",
+  "mainClass": "net.minecraft.client.main.Main",
+  "minimumLauncherVersion": 21,
+  "tlauncherVersion": 0,
+  "libraries": [
+    {
+      "name": "at.yawk.lz4:lz4-java:1.8.1",
+      "downloads": {
+        "artifact": {
+          "url": "https://libraries.minecraft.net/at/yawk/lz4/lz4-java/1.8.1/lz4-java-1.8.1.jar",
+          "sha1": "1f30a180ee04ccd53339a716aec13cae60a013b5",
+          "size": 683071
+        }
+      }
+    },
+    {
+      "name": "ca.weblite:java-objc-bridge:1.1",
+      "rules": [
+        {
+          "action": "allow",
+          "os": {
+            "name": "osx"
+          }
+        }
+      ],
+      "downloads": {
+        "artifact": {
+          "url": "https://libraries.minecraft.net/ca/weblite/java-objc-bridge/1.1/java-objc-bridge-1.1.jar",
+          "sha1": "1227f9e0666314f9de41477e3ec277e542ed7f7b",
+          "size": 1330045
+        }
+      }
+    }
+  ],
+  "downloads": {},
+  "assetIndex": {
+    "totalSize": 439959867,
+    "id": "29",
+    "known": true,
+    "url": "https://piston-meta.mojang.com/v1/packages/744d1f556f65e2d1eac0626f126ee2e31a7519ea/29.json",
+    "sha1": "744d1f556f65e2d1eac0626f126ee2e31a7519ea",
+    "size": 529372
+  },
+  "assets": "29",
+  "arguments": {
+    "jvm": [
+      {
+        "value": "-XstartOnFirstThread",
+        "rules": [
+          {
+            "action": "allow",
+            "os": {
+              "name": "osx"
+            }
+          }
+        ]
+      },
+      {
+        "value": "-XX:HeapDumpPath\u003dMojangTricksIntelDriversForPerformance_javaw.exe_minecraft.exe.heapdump",
+        "rules": [
+          {
+            "action": "allow",
+            "os": {
+              "name": "windows"
+            }
+          }
+        ]
+      },
+      {
+        "value": "-Xss1M",
+        "rules": [
+          {
+            "action": "allow",
+            "os": {}
+          }
+        ]
+      },
+      {
+        "value": "-Djava.library.path\u003d${natives_directory}"
+      },
+      {
+        "value": "-Djna.tmpdir\u003d${natives_directory}"
+      },
+      {
+        "value": "-Dorg.lwjgl.system.SharedLibraryExtractPath\u003d${natives_directory}"
+      },
+      {
+        "value": "-Dio.netty.native.workdir\u003d${natives_directory}"
+      },
+      {
+        "value": "-Dminecraft.launcher.brand\u003d${launcher_name}"
+      },
+      {
+        "value": "-Dminecraft.launcher.version\u003d${launcher_version}"
+      },
+      {
+        "value": "-cp"
+      },
+      {
+        "value": "${classpath}"
+      }
+    ],
+    "game": [
+      {
+        "value": "--username"
+      },
+      {
+        "value": "${auth_player_name}"
+      },
+      {
+        "value": "--version"
+      },
+      {
+        "value": "${version_name}"
+      },
+      {
+        "value": "--gameDir"
+      },
+      {
+        "value": "${game_directory}"
+      },
+      {
+        "value": "--assetsDir"
+      },
+      {
+        "value": "${assets_root}"
+      },
+      {
+        "value": "--assetIndex"
+      },
+      {
+        "value": "${assets_index_name}"
+      },
+      {
+        "value": "--uuid"
+      },
+      {
+        "value": "${auth_uuid}"
+      },
+      {
+        "value": "--accessToken"
+      },
+      {
+        "value": "${auth_access_token}"
+      },
+      {
+        "value": "--clientId"
+      },
+      {
+        "value": "${clientid}"
+      },
+      {
+        "value": "--xuid"
+      },
+      {
+        "value": "${auth_xuid}"
+      },
+      {
+        "value": "--versionType"
+      },
+      {
+        "value": "${version_type}"
+      },
+      {
+        "value": "--demo",
+        "rules": [
+          {
+            "action": "allow",
+            "features": {
+              "is_demo_user": true
+            }
+          }
+        ]
+      },
+      {
+        "value": [
+          "--width",
+          "${resolution_width}",
+          "--height",
+          "${resolution_height}"
+        ],
+        "rules": [
+          {
+            "action": "allow",
+            "features": {
+              "has_custom_resolution": true
+            }
+          }
+        ]
+      },
+      {
+        "value": [
+          "--quickPlayPath",
+          "${quickPlayPath}"
+        ],
+        "rules": [
+          {
+            "action": "allow",
+            "features": {
+              "has_quick_plays_support": true
+            }
+          }
+        ]
+      },
+      {
+        "value": [
+          "--quickPlaySingleplayer",
+          "${quickPlaySingleplayer}"
+        ],
+        "rules": [
+          {
+            "action": "allow",
+            "features": {
+              "is_quick_play_singleplayer": true
+            }
+          }
+        ]
+      },
+      {
+        "value": [
+          "--quickPlayMultiplayer",
+          "${quickPlayMultiplayer}"
+        ],
+        "rules": [
+          {
+            "action": "allow",
+            "features": {
+              "is_quick_play_multiplayer": true
+            }
+          }
+        ]
+      },
+      {
+        "value": [
+          "--quickPlayRealms",
+          "${quickPlayRealms}"
+        ],
+        "rules": [
+          {
+            "action": "allow",
+            "features": {
+              "is_quick_play_realms": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "javaVersion": {
+    "component": "java-runtime-delta",
+    "majorVersion": 21
+  },
+  "logging": {
+    "client": {
+      "argument": "-Dlog4j.configurationFile\u003d${path}",
+      "file": {
+        "id": "client-1.21.2.xml",
+        "url": "https://piston-data.mojang.com/v1/objects/39384bd14c0606d812afec88d8aff595b2587dd9/client-1.21.2.xml",
+        "sha1": "39384bd14c0606d812afec88d8aff595b2587dd9",
+        "size": 1073
+      },
+      "type": "log4j2-xml"
+    }
+  }
+}

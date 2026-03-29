@@ -135,11 +135,21 @@ impl Default for AporiaApp {
 
 impl AporiaApp {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        // Настройка стилей
+        // Настройка стилей с блюром и прозрачностями
         let mut style = (*cc.egui_ctx.style()).clone();
-        style.spacing.item_spacing = egui::vec2(8.0, 6.0);
-        style.spacing.button_padding = egui::vec2(12.0, 8.0);
+        style.spacing.item_spacing = egui::vec2(12.0, 8.0);
+        style.spacing.button_padding = egui::vec2(16.0, 10.0);
         style.visuals.button_frame = true;
+        style.visuals.window_fill = egui::Color32::from_rgba_unmultiplied(20, 20, 30, 240);
+        style.visuals.panel_fill = egui::Color32::from_rgba_unmultiplied(15, 15, 25, 235);
+        style.visuals.extreme_bg_color = egui::Color32::from_rgba_unmultiplied(10, 10, 20, 250);
+        
+        // Цвета под систему Taryn - лаконичные, приглушённые
+        style.visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgba_unmultiplied(30, 30, 45, 200);
+        style.visuals.widgets.inactive.bg_fill = egui::Color32::from_rgba_unmultiplied(40, 40, 60, 210);
+        style.visuals.widgets.hovered.bg_fill = egui::Color32::from_rgba_unmultiplied(50, 50, 75, 220);
+        style.visuals.widgets.active.bg_fill = egui::Color32::from_rgba_unmultiplied(60, 60, 90, 230);
+        
         cc.egui_ctx.set_style(style);
         
         // Загружаем changelog
@@ -153,63 +163,15 @@ impl AporiaApp {
     fn load_changelog(&mut self) {
         self.changelog_loading = true;
         
-        std::thread::spawn(move || {
-            // Пытаемся загрузить с GitHub
-            let client = reqwest::blocking::Client::new();
-            
-            if let Ok(response) = client
-                .get("https://raw.githubusercontent.com/aporia-xyz/Aporia.loader/main/CHANGELOG.md")
-                .send()
-            {
-                if let Ok(text) = response.text() {
-                    // Парсим changelog
-                    let entries = parse_changelog(&text);
-                    return entries;
-                }
-            }
-            
-            // Дефолтный changelog
-            vec![
-                ChangelogEntry {
-                    version: "0.3.0".to_string(),
-                    date: "2026-03-29".to_string(),
-                    changes: vec![
-                        "Полный редизайн GUI".to_string(),
-                        "Добавлена версия Cheat".to_string(),
-                        "Улучшена производительность".to_string(),
-                    ],
-                },
-                ChangelogEntry {
-                    version: "0.2.0".to_string(),
-                    date: "2026-03-28".to_string(),
-                    changes: vec![
-                        "Переписано на Rust".to_string(),
-                        "Кроссплатформенный GUI".to_string(),
-                    ],
-                },
-            ]
-        });
+        // Дефолтный changelog пока загружаем
+        self.changelog = default_changelog();
         
-        // Дефолтный changelog пока
-        self.changelog = vec![
-            ChangelogEntry {
-                version: "0.3.0".to_string(),
-                date: "2026-03-29".to_string(),
-                changes: vec![
-                    "Полный редизайн GUI".to_string(),
-                    "Добавлена версия Cheat".to_string(),
-                    "Улучшена производительность".to_string(),
-                ],
-            },
-            ChangelogEntry {
-                version: "0.2.0".to_string(),
-                date: "2026-03-28".to_string(),
-                changes: vec![
-                    "Переписано на Rust".to_string(),
-                    "Кроссплатформенный GUI".to_string(),
-                ],
-            },
-        ];
+        std::thread::spawn(|| {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            let _ = rt.block_on(async {
+                let _ = fetch_releases_from_github().await;
+            });
+        });
         
         self.changelog_loading = false;
     }
@@ -217,24 +179,23 @@ impl AporiaApp {
     /// Отрисовка топбара
     fn draw_topbar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            // Логотип слева
-            ui.label(egui::RichText::new("Aporia.cc").size(20.0).strong().color(egui::Color32::from_rgb(0, 200, 200)));
+            // Логотип слева - приглушённый голубой
+            ui.label(egui::RichText::new("◆ Aporia").size(18.0).strong().color(egui::Color32::from_rgb(120, 180, 200)));
             
-            ui.add_space(20.0);
+            ui.add_space(30.0);
             
             // Добро пожаловать
             if !self.config.username.is_empty() {
-                ui.label(egui::RichText::new(format!("Добро пожаловать, {}", self.config.username)).size(14.0));
+                ui.label(egui::RichText::new(format!("Welcome, {}", self.config.username)).size(13.0).color(egui::Color32::from_rgb(180, 180, 190)));
             }
             
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 // Кнопка настроек справа
-                if ui.button("⚙️").clicked() {
+                if ui.button(egui::RichText::new("⚙").size(16.0)).clicked() {
                     self.state = AppState::Settings;
                 }
                 
-                // Username справа
-                ui.label(egui::RichText::new(&self.config.username).size(14.0));
+                ui.add_space(10.0);
             });
         });
     }
@@ -242,29 +203,30 @@ impl AporiaApp {
     /// Экран логина
     fn draw_login(&mut self, ui: &mut egui::Ui) {
         ui.vertical_centered(|ui| {
-            ui.add_space(50.0);
+            ui.add_space(60.0);
             
-            ui.label(egui::RichText::new("Aporia.cc").size(48.0).strong().color(egui::Color32::from_rgb(0, 200, 200)));
-            ui.label(egui::RichText::new("Launcher").size(24.0).color(egui::Color32::GRAY));
+            ui.label(egui::RichText::new("◆ Aporia").size(56.0).strong().color(egui::Color32::from_rgb(120, 180, 200)));
+            ui.label(egui::RichText::new("Launcher").size(20.0).color(egui::Color32::from_rgb(150, 150, 160)));
             
-            ui.add_space(50.0);
+            ui.add_space(60.0);
             
-            ui.label(egui::RichText::new("Введите ваш никнейм").size(16.0));
-            ui.add_space(10.0);
+            ui.label(egui::RichText::new("Enter your nickname").size(15.0).color(egui::Color32::from_rgb(200, 200, 210)));
+            ui.add_space(15.0);
             
             let text_edit = egui::TextEdit::singleline(&mut self.username_input)
-                .hint_text("Никнейм")
-                .desired_width(250.0)
+                .hint_text("Nickname")
+                .desired_width(280.0)
                 .font(egui::TextStyle::Heading);
             
             if ui.add(text_edit).lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                 self.complete_login();
             }
             
-            ui.add_space(20.0);
+            ui.add_space(25.0);
             
-            let button = egui::Button::new(egui::RichText::new("Продолжить").size(18.0))
-                .min_size(egui::vec2(200.0, 45.0));
+            let button = egui::Button::new(egui::RichText::new("Continue").size(16.0))
+                .min_size(egui::vec2(220.0, 48.0))
+                .fill(egui::Color32::from_rgb(100, 160, 180));
             
             if ui.add(button).clicked() {
                 self.complete_login();
@@ -286,11 +248,11 @@ impl AporiaApp {
         ui.horizontal(|ui| {
             // Левая панель - версия и запуск
             ui.vertical(|ui| {
-                ui.add_space(20.0);
+                ui.add_space(25.0);
 
                 // Выбор версии
-                ui.label(egui::RichText::new("Версия").size(16.0).strong());
-                ui.add_space(10.0);
+                ui.label(egui::RichText::new("Version").size(15.0).strong().color(egui::Color32::from_rgb(200, 200, 210)));
+                ui.add_space(12.0);
 
                 egui::ComboBox::from_label("")
                     .selected_text(self.selected_version.name())
@@ -299,24 +261,28 @@ impl AporiaApp {
                         ui.selectable_value(&mut self.selected_version, McVersion::CheatLatest, "Cheat Latest");
                     });
 
-                ui.add_space(30.0);
+                ui.add_space(40.0);
 
-                // Кнопка запуска
+                // Кнопка запуска - контрастный цвет, не сливается
                 let button_text = if self.is_launching {
                     &self.launch_message
                 } else if self.launch_complete {
-                    "✓ Запущено"
+                    "✓ Launched"
                 } else {
-                    "▶ Запустить"
+                    "▶ Launch"
                 };
 
-                let button = egui::Button::new(egui::RichText::new(button_text).size(20.0))
-                    .min_size(egui::vec2(250.0, 60.0))
-                    .fill(if self.is_launching {
-                        egui::Color32::GRAY
-                    } else {
-                        egui::Color32::from_rgb(0, 200, 100)
-                    });
+                let button_color = if self.is_launching {
+                    egui::Color32::from_rgb(80, 80, 100)
+                } else if self.launch_complete {
+                    egui::Color32::from_rgb(100, 140, 120)
+                } else {
+                    egui::Color32::from_rgb(140, 100, 180) // Фиолетовый - контрастный к фону
+                };
+
+                let button = egui::Button::new(egui::RichText::new(button_text).size(18.0))
+                    .min_size(egui::vec2(260.0, 65.0))
+                    .fill(button_color);
 
                 let response = ui.add(button);
 
@@ -326,39 +292,39 @@ impl AporiaApp {
 
                 // Прогресс бар
                 if self.is_launching {
-                    ui.add_space(10.0);
+                    ui.add_space(12.0);
                     ui.add(egui::ProgressBar::new(self.launch_progress).show_percentage());
                 }
 
-                ui.add_space(30.0);
+                ui.add_space(40.0);
 
                 // Для release версии
                 if self.selected_version == McVersion::Fabric121 {
-                    ui.label(egui::RichText::new("For release").size(12.0).color(egui::Color32::GRAY));
+                    ui.label(egui::RichText::new("For release").size(11.0).color(egui::Color32::from_rgb(120, 120, 130)));
                 }
             });
 
-            ui.add_space(30.0);
+            ui.add_space(40.0);
 
             // Правая панель - changelog
             ui.vertical(|ui| {
-                ui.add_space(20.0);
-                ui.label(egui::RichText::new("Changelog").size(16.0).strong());
-                ui.add_space(10.0);
+                ui.add_space(25.0);
+                ui.label(egui::RichText::new("Changelog").size(15.0).strong().color(egui::Color32::from_rgb(200, 200, 210)));
+                ui.add_space(12.0);
 
-                egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
+                egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
                     for entry in &self.changelog {
                         ui.vertical(|ui| {
                             ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new(&entry.version).strong().color(egui::Color32::from_rgb(0, 200, 200)));
-                                ui.label(egui::RichText::new(&entry.date).color(egui::Color32::GRAY));
+                                ui.label(egui::RichText::new(&entry.version).strong().color(egui::Color32::from_rgb(120, 180, 200)));
+                                ui.label(egui::RichText::new(&entry.date).color(egui::Color32::from_rgb(120, 120, 130)));
                             });
 
                             for change in &entry.changes {
-                                ui.label(egui::RichText::new(format!("• {}", change)).size(12.0));
+                                ui.label(egui::RichText::new(format!("• {}", change)).size(11.0).color(egui::Color32::from_rgb(180, 180, 190)));
                             }
                         });
-                        ui.add_space(10.0);
+                        ui.add_space(12.0);
                         ui.separator();
                     }
                 });
@@ -369,24 +335,24 @@ impl AporiaApp {
     /// Экран настроек - контент
     fn draw_settings_content(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
-            ui.add_space(20.0);
-            ui.heading("⚙️ Настройки");
+            ui.add_space(25.0);
+            ui.heading(egui::RichText::new("⚙ Settings").size(24.0).color(egui::Color32::from_rgb(200, 200, 210)));
             ui.separator();
-            ui.add_space(20.0);
+            ui.add_space(25.0);
 
             ui.horizontal(|ui| {
-                ui.label("RAM (MB):");
+                ui.label(egui::RichText::new("RAM (MB):").size(14.0));
                 ui.add(egui::DragValue::new(&mut self.temp_ram).range(1024..=32768));
             });
 
-            ui.add_space(10.0);
+            ui.add_space(15.0);
 
-            ui.checkbox(&mut self.temp_dev_mode, "Dev режим (-noverify)");
+            ui.checkbox(&mut self.temp_dev_mode, egui::RichText::new("Dev mode (-noverify)").size(14.0));
 
-            ui.add_space(30.0);
+            ui.add_space(40.0);
 
             ui.horizontal(|ui| {
-                if ui.button("Сохранить").clicked() {
+                if ui.button(egui::RichText::new("Save").size(14.0)).clicked() {
                     self.config.ram_mb = self.temp_ram;
                     self.config.dev_mode = self.temp_dev_mode;
                     let config_path = self.config.config_path();
@@ -394,7 +360,7 @@ impl AporiaApp {
                     self.state = AppState::Main;
                 }
 
-                if ui.button("Отмена").clicked() {
+                if ui.button(egui::RichText::new("Cancel").size(14.0)).clicked() {
                     self.state = AppState::Main;
                 }
             });
@@ -903,6 +869,120 @@ fn parse_changelog(text: &str) -> Vec<ChangelogEntry> {
     }
     
     entries
+}
+
+/// Дефолтный changelog
+fn default_changelog() -> Vec<ChangelogEntry> {
+    vec![
+        ChangelogEntry {
+            version: "0.3.0".to_string(),
+            date: "2026-03-29".to_string(),
+            changes: vec![
+                "Complete UI redesign".to_string(),
+                "Added Cheat version".to_string(),
+                "Performance improvements".to_string(),
+            ],
+        },
+        ChangelogEntry {
+            version: "0.2.0".to_string(),
+            date: "2026-03-28".to_string(),
+            changes: vec![
+                "Rewritten in Rust".to_string(),
+                "Cross-platform GUI".to_string(),
+            ],
+        },
+    ]
+}
+
+/// Загрузить релизы с GitHub
+async fn fetch_releases_from_github() -> anyhow::Result<Vec<ChangelogEntry>> {
+    let client = reqwest::Client::new();
+    
+    // Получаем релизы
+    let releases_url = "https://api.github.com/repos/dakychan/Aporia/releases";
+    let response = client
+        .get(releases_url)
+        .header("User-Agent", "Aporia-Loader")
+        .send()
+        .await?;
+    
+    let releases: Vec<JsonValue> = response.json().await?;
+    let mut entries = Vec::new();
+    
+    for release in releases.iter().take(10) {
+        if let (Some(tag), Some(body)) = (
+            release.get("tag_name").and_then(|v| v.as_str()),
+            release.get("body").and_then(|v| v.as_str()),
+        ) {
+            let published_at = release
+                .get("published_at")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Unknown")
+                .split('T')
+                .next()
+                .unwrap_or("Unknown");
+            
+            // Парсим чейнджлог из body
+            let changes: Vec<String> = body
+                .lines()
+                .filter(|line| line.trim().starts_with('-') || line.trim().starts_with('*'))
+                .map(|line| {
+                    line.trim()
+                        .trim_start_matches('-')
+                        .trim_start_matches('*')
+                        .trim()
+                        .to_string()
+                })
+                .collect();
+            
+            entries.push(ChangelogEntry {
+                version: tag.to_string(),
+                date: published_at.to_string(),
+                changes: if changes.is_empty() {
+                    vec!["Release".to_string()]
+                } else {
+                    changes
+                },
+            });
+        }
+    }
+    
+    Ok(if entries.is_empty() {
+        default_changelog()
+    } else {
+        entries
+    })
+}
+
+/// Загрузить коммиты для версии
+async fn fetch_commits_for_version(branch: &str) -> anyhow::Result<Vec<String>> {
+    let client = reqwest::Client::new();
+    
+    let commits_url = format!(
+        "https://api.github.com/repos/dakychan/Aporia/commits?sha={}&per_page=20",
+        branch
+    );
+    
+    let response = client
+        .get(&commits_url)
+        .header("User-Agent", "Aporia-Loader")
+        .send()
+        .await?;
+    
+    let commits: Vec<JsonValue> = response.json().await?;
+    let mut messages = Vec::new();
+    
+    for commit in commits {
+        if let Some(msg) = commit
+            .get("commit")
+            .and_then(|c| c.get("message"))
+            .and_then(|m| m.as_str())
+        {
+            messages.push(msg.lines().next().unwrap_or("").to_string());
+        }
+    }
+    
+    Ok(messages)
 }
 
 impl eframe::App for AporiaApp {

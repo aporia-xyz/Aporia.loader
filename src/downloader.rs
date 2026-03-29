@@ -1,6 +1,6 @@
 //! Модуль загрузки файлов
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::fs;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -55,7 +55,7 @@ impl Downloader {
             anyhow::bail!("HTTP error: {}", response.status());
         }
 
-        let total_size = response.content_length().unwrap_or(0);
+        let _total_size = response.content_length().unwrap_or(0);
         
         // Создаем директорию если нужно
         if let Some(parent) = Path::new(output).parent() {

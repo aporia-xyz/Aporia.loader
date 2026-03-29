@@ -1,0 +1,1130 @@
+{
+  "modules": {
+    "Hud": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Элементы": [
+          "Watermark",
+          "HotKeys",
+          "Potions",
+          "Staff",
+          "TargetHud",
+          "Info",
+          "Notifications"
+        ],
+        "Show BPS": true,
+        "Show TPS": true
+      }
+    },
+    "Aura": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим наводки": "Matrix",
+        "Дистанция удара": 3.0,
+        "Дистанция поиска": 1.5,
+        "Настройки": [
+          "Бить сквозь стены",
+          "Рандомизация крита",
+          "Не бить если ешь"
+        ],
+        "Настройка целей": [
+          "Игроки",
+          "Мобы",
+          "Животные"
+        ],
+        "Коррекция движения": "Сфокусированная",
+        "Сброс спринта": "Легитный",
+        "Только криты": true,
+        "Умные криты": true
+      }
+    },
+    "HitEffect": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Цвет": {
+          "hue": 0.06410256,
+          "saturation": 0.47445256,
+          "brightness": 0.5372549,
+          "alpha": 1.0
+        }
+      }
+    },
+    "Esp": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Тип сущности": [
+          "Player",
+          "Item"
+        ],
+        "Настройки игрока": [
+          "Box",
+          "Armor",
+          "NameTags",
+          "Hand Items"
+        ],
+        "Тип": "Corner",
+        "Цвет бокса": {
+          "hue": 0.111111104,
+          "saturation": 1.0,
+          "brightness": 1.0,
+          "alpha": 1.0
+        },
+        "Цвет друга": {
+          "hue": 0.33333334,
+          "saturation": 1.0,
+          "brightness": 1.0,
+          "alpha": 1.0
+        },
+        "Контур": false,
+        "Прозрачность": 1.0
+      }
+    },
+    "BlockESP": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Цвет": {
+          "hue": 0.0,
+          "saturation": 1.0,
+          "brightness": 1.0,
+          "alpha": 1.0
+        },
+        "Радиус": 32.0,
+        "Уведомления": false
+      }
+    },
+    "AutoTool": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Визуально": true
+      }
+    },
+    "Region Exploit": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "Приниматель",
+        "Радиус региона": 10.0,
+        "Кнопка отправки": {
+          "key": -1,
+          "type": 1
+        }
+      }
+    },
+    "WorldParticles": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "Звезда",
+        "Количество": 100.0,
+        "Время жизни": 10.0,
+        "Размер": 1.5,
+        "Свечение": 3.0,
+        "Физика": false,
+        "Рандомный цвет": false,
+        "Белые при спавне": true,
+        "Белый центр": false,
+        "Цвет": {
+          "hue": 0.06410256,
+          "saturation": 0.47445256,
+          "brightness": 0.5372549,
+          "alpha": 1.0
+        }
+      }
+    },
+    "Arrows": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Дистанция": 25.0,
+        "Цвет": {
+          "hue": 0.06410256,
+          "saturation": 0.47445256,
+          "brightness": 0.5372549,
+          "alpha": 1.0
+        }
+      }
+    },
+    "Particles": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "Звезда",
+        "Свечение": "Bloom Sample",
+        "Триггеры": [
+          "Удар",
+          "Тотем",
+          "Ходьба",
+          "Бросаемый предмет"
+        ],
+        "Количество": 40.0,
+        "Кол-во при ходьбе": 30.0,
+        "Разброс": 1.0,
+        "Скорость": 2.0,
+        "Время жизни": 2.5,
+        "Размер": 1.0,
+        "Рандомный цвет": false,
+        "Цвет": {
+          "hue": 0.06410256,
+          "saturation": 0.47445256,
+          "brightness": 0.5372549,
+          "alpha": 1.0
+        }
+      }
+    },
+    "AuctionHelper": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Фильтр шипов": true,
+        "Цена за штуку": false
+      }
+    },
+    "GlassHands": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Сила размытия": 2.5,
+        "Качество": 3.0,
+        "Насыщенность": 0.0,
+        "Оттенок": false,
+        "Сила оттенка": 0.2,
+        "Цвет оттенка": {
+          "hue": 0.5,
+          "saturation": 1.0,
+          "brightness": 1.0,
+          "alpha": 1.0
+        },
+        "Свечение краёв": true,
+        "Сила свечения": 0.2
+      }
+    },
+    "Chunk Animator": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Скорость": 10.0
+      }
+    },
+    "MaceTarget": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Сервер": "Default",
+        "Режим": "Silent",
+        "Высота": 30.0,
+        "Цели": [
+          "Игроки"
+        ],
+        "Авто-нагрудник": true,
+        "Предугадывание": true
+      }
+    },
+    "TriggerBot": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Дистанция удара": 3.0,
+        "Тип таргета": [
+          "Игроки",
+          "Мобы",
+          "Животные"
+        ],
+        "Настройки": [
+          "Только криты"
+        ],
+        "Сброс спринта": "Легитный",
+        "Умные криты": true
+      }
+    },
+    "BowSpammer": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Задержка": 2.5
+      }
+    },
+    "Ambience": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Время": 1000.0
+      }
+    },
+    "AutoTotem": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим свапа": "Legit",
+        "Порог здоровья": 6.0,
+        "Триггеры": [
+          "Кристалл",
+          "Падение",
+          "Анти ваншот"
+        ],
+        "Опции": [
+          "Не брать если шар",
+          "Возврат предмета",
+          "Сохранять талисманы"
+        ],
+        "Дистанция кристалла": 6.0,
+        "Высота падения": 15.0,
+        "Дистанция динамита": 6.0,
+        "Дистанция вагонетки": 6.0,
+        "Здоровье элитры": 10.0
+      }
+    },
+    "TapeMouse": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Тип": "Левая кнопка",
+        "Задержка": 1.0
+      }
+    },
+    "ElytraHelper": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "Legit",
+        "Кнопка свапа": {
+          "key": -1,
+          "type": 1
+        },
+        "Кнопка фейерверка": {
+          "key": -1,
+          "type": 1
+        }
+      }
+    },
+    "ChinaHat": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Color 1": {
+          "hue": 0.9593496,
+          "saturation": 0.8039216,
+          "brightness": 1.0,
+          "alpha": 1.0
+        },
+        "Color 2": {
+          "hue": 0.70731705,
+          "saturation": 0.8039216,
+          "brightness": 1.0,
+          "alpha": 1.0
+        }
+      }
+    },
+    "AutoPotion": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Бросать": [
+          "Силу",
+          "Скорость"
+        ],
+        "Авто отключение": false
+      }
+    },
+    "Jesus": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "Matrix",
+        "Скорость FT": 0.08
+      }
+    },
+    "ClientSounds": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Тип звука": "New",
+        "Громкость": 1.0
+      }
+    },
+    "AutoGApple": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Здоровье": 16.0,
+        "Умный": true,
+        "Золотые сердца": true,
+        "Возвращать слот": true
+      }
+    },
+    "Server Assist": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Тип сервера": "FunTime",
+        "Режим свапа": "Legit",
+        "Цвет заливки": {
+          "hue": 0.023391813,
+          "saturation": 0.8769231,
+          "brightness": 0.50980395,
+          "alpha": 0.15686275
+        },
+        "Цвет линий": {
+          "hue": 0.023391813,
+          "saturation": 0.8769231,
+          "brightness": 0.50980395,
+          "alpha": 1.0
+        },
+        "Анти полет": {
+          "key": -1,
+          "type": 1
+        },
+        "Свиток опыта": {
+          "key": -1,
+          "type": 1
+        },
+        "Взрывная трапка": {
+          "key": -1,
+          "type": 1
+        },
+        "Обычная трапка": {
+          "key": -1,
+          "type": 1
+        },
+        "Стан": {
+          "key": -1,
+          "type": 1
+        },
+        "Взрывная штучка": {
+          "key": -1,
+          "type": 1
+        },
+        "Снежок заморозка": {
+          "key": -1,
+          "type": 1
+        },
+        "Божья аура": {
+          "key": -1,
+          "type": 1
+        },
+        "Трапка": {
+          "key": -1,
+          "type": 1
+        },
+        "Пласт": {
+          "key": -1,
+          "type": 1
+        },
+        "Явная пыль": {
+          "key": -1,
+          "type": 1
+        },
+        "Огненный смерч": {
+          "key": -1,
+          "type": 1
+        },
+        "Дезориентация": {
+          "key": -1,
+          "type": 1
+        },
+        "Светильник Джека": {
+          "key": -1,
+          "type": 1
+        },
+        "Пузырь опыта": {
+          "key": -1,
+          "type": 1
+        },
+        "Рюкзак 1 уровня": {
+          "key": -1,
+          "type": 1
+        },
+        "Рюкзак 2 уровня": {
+          "key": -1,
+          "type": 1
+        },
+        "Рюкзак 3 уровня": {
+          "key": -1,
+          "type": 1
+        },
+        "Рюкзак 4 уровня": {
+          "key": -1,
+          "type": 1
+        },
+        "Хлопушка": {
+          "key": -1,
+          "type": 1
+        },
+        "Святая вода": {
+          "key": -1,
+          "type": 1
+        },
+        "Зелье Гнева": {
+          "key": -1,
+          "type": 1
+        },
+        "Зелье Палладина": {
+          "key": -1,
+          "type": 1
+        },
+        "Зелье Ассасина": {
+          "key": -1,
+          "type": 1
+        },
+        "Зелье Радиации": {
+          "key": -1,
+          "type": 1
+        },
+        "Снотворное": {
+          "key": -1,
+          "type": 1
+        }
+      }
+    },
+    "WindJump": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "Legit",
+        "Кнопка": {
+          "key": -1,
+          "type": 1
+        }
+      }
+    },
+    "TargetEsp": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "Rhomb",
+        "Скорость вращения кристаллов": 0.5,
+        "Цвет 1": {
+          "hue": 0.037037034,
+          "saturation": 0.7764706,
+          "brightness": 1.0,
+          "alpha": 1.0
+        },
+        "Цвет 2": {
+          "hue": 0.9186992,
+          "saturation": 0.8039216,
+          "brightness": 1.0,
+          "alpha": 1.0
+        },
+        "Цвет 3": {
+          "hue": 0.7479675,
+          "saturation": 0.8039216,
+          "brightness": 1.0,
+          "alpha": 1.0
+        }
+      }
+    },
+    "BlockOverlay": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {}
+    },
+    "HitSound": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Тип звука": "Moan",
+        "Громкость": 1.0
+      }
+    },
+    "ClickPearl": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "Legit",
+        "Кнопка": {
+          "key": -1,
+          "type": 1
+        }
+      }
+    },
+    "JumpCircle": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Max Size": 2.0,
+        "Speed": 2000.0,
+        "Glow": true,
+        "Цвет 1": {
+          "hue": 0.06410256,
+          "saturation": 0.47445256,
+          "brightness": 0.5372549,
+          "alpha": 1.0
+        },
+        "Цвет 2": {
+          "hue": 0.0,
+          "saturation": 0.0,
+          "brightness": 1.0,
+          "alpha": 1.0
+        }
+      }
+    },
+    "ItemScroller": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Задержка прокрутки предметов": 50.0
+      }
+    },
+    "TargetStrafe": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "Matrix",
+        "Точка ходьбы": "Cube",
+        "Точка для обхода": "Circle",
+        "Радиус обхода": 0.87,
+        "Радиус": 2.5,
+        "Скорость": 0.3,
+        "Настройки": [
+          "Auto Jump"
+        ],
+        "Направление": "Clockwise"
+      }
+    },
+    "AutoLeave": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Тип выхода": "Main Menu",
+        "Триггеры": [
+          "Players",
+          "Staff"
+        ],
+        "Максимальная дистанция": 10.0
+      }
+    },
+    "Strafe": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "Matrix",
+        "Скорость": 0.42
+      }
+    },
+    "AutoDuel": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "Шары",
+        "Скорость отправки": 500.0,
+        "Играть на деньги": false,
+        "Монет": "10000"
+      }
+    },
+    "NoWeb": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "Grim"
+      }
+    },
+    "AutoTpAccept": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Только друзья": true
+      }
+    },
+    "Spider": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "Slime Block"
+      }
+    },
+    "ClickFriend": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Добавить друга": {
+          "key": -1,
+          "type": 1
+        }
+      }
+    },
+    "FreeLook": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Свободный обзор": {
+          "key": -1,
+          "type": 1
+        }
+      }
+    },
+    "Fly": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "Normal",
+        "Скорость XZ": 1.5,
+        "Скорость Y": 1.5
+      }
+    },
+    "ElytraMotion": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {}
+    },
+    "FullBright": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {}
+    },
+    "CameraSettings": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Проход камеры": true,
+        "Дистанция камеры": 3.0,
+        "Зум": {
+          "key": -1,
+          "type": 1
+        }
+      }
+    },
+    "ItemPhysic": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {}
+    },
+    "NoDelay": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Тип": [
+          "Прыжок"
+        ]
+      }
+    },
+    "ServerRPSpoof": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {}
+    },
+    "SeeInvisible": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Прозрачность": 0.5
+      }
+    },
+    "AutoPilot": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {}
+    },
+    "NoFallDamage": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "SpookyTime"
+      }
+    },
+    "NoRender": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Элементы": [
+          "Fire",
+          "Bad Effects",
+          "Block Overlay",
+          "Darkness",
+          "Damage",
+          "Nausea"
+        ]
+      }
+    },
+    "ShiftTap": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {}
+    },
+    "HitBox": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Расширение XZ": 0.2,
+        "Расширение Y": 0.0
+      }
+    },
+    "WaterSpeed": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "FunTime",
+        "Ускорение под льдом": true,
+        "Скорость под льдом": 1.5
+      }
+    },
+    "NameProtect": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Друзья": true
+      }
+    },
+    "NoFriendDamage": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {}
+    },
+    "ProjectileHelper": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Дистанция поиска": 16.0,
+        "Тип таргета": [
+          "Players",
+          "Mobs",
+          "Animals"
+        ]
+      }
+    },
+    "InventoryMove": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "Legit",
+        "Grim Bypass": true
+      }
+    },
+    "ChestStealer": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Тип": "FunTime",
+        "Задержка": 100.0,
+        "Предметы": []
+      }
+    },
+    "NoInteract": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {}
+    },
+    "AntiBot": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "ReallyWorld"
+      }
+    },
+    "ViewModel": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Основная рука X": 0.0,
+        "Основная рука Y": 0.0,
+        "Основная рука Z": 0.0,
+        "Второстепенная рука X": 0.0,
+        "Второстепенная рука Y": 0.0,
+        "Второстепенная рука Z": 0.0
+      }
+    },
+    "SuperFireWork": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "BravoHvH",
+        "Скорость": 1.963
+      }
+    },
+    "LongJump": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "Boat"
+      }
+    },
+    "ElytraTarget": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Дистанция наводки": 32.0,
+        "Значение перегона": 3.0,
+        "Кнопка вкл/выкл перегона": {
+          "key": -1,
+          "type": 1
+        }
+      }
+    },
+    "FreeCam": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Скорость": 2.0,
+        "Заморозка": false,
+        "Reload Chunks": true,
+        "Toggle On Log": true
+      }
+    },
+    "Speed": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "Grim",
+        "Скорость": 1.5
+      }
+    },
+    "NoEntityTrace": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Выключать с мечом": true
+      }
+    },
+    "AutoRespawn": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "Default"
+      }
+    },
+    "AutoSwap": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "Legit",
+        "Кнопка свапа": {
+          "key": -1,
+          "type": 1
+        },
+        "Основной предмет": "Totem of Undying",
+        "Вторичный предмет": "Totem of Undying",
+        "Стоп движение": true,
+        "Стоп спринт": true,
+        "Закрыть инвентарь": true,
+        "До стопа (мин)": 0.0,
+        "До стопа (макс)": 50.0,
+        "Ожидание стопа (мин)": 50.0,
+        "Ожидание стопа (макс)": 150.0,
+        "До свапа (мин)": 20.0,
+        "До свапа (макс)": 100.0,
+        "После свапа (мин)": 20.0,
+        "После свапа (макс)": 80.0,
+        "Восстановление (мин)": 50.0,
+        "Восстановление (макс)": 150.0,
+        "Порог скорости": 0.001
+      }
+    },
+    "AntiPush": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Игнорировать": []
+      }
+    },
+    "NoSlow": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим предмета": "Grim Old"
+      }
+    },
+    "Velocity": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "NewGrim"
+      }
+    },
+    "SwingAnimation": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Тип взмаха": "Chop",
+        "Сила взмаха": 1.0,
+        "Длительность взмаха": 1.0,
+        "Только при взмахе": false,
+        "Только при включенной КиллАуре": false
+      }
+    },
+    "AutoSprint": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Не сбрасывать спринт": false
+      }
+    },
+    "Auto Buy": {
+      "enabled": false,
+      "key": -1,
+      "type": 1,
+      "favorite": false,
+      "settings": {
+        "Режим": "Проверяющий",
+        "Сервера": "Выкл",
+        "Задержка обновления": 500.0,
+        "Время смены сервера": 30.0,
+        "Уведомления": true
+      }
+    }
+  },
+  "autobuy": {
+    "globalEnabled": false,
+    "items": {}
+  },
+  "version": "0.4",
+  "timestamp": 1772652092946,
+  "client": "Aporia.cc"
+}
