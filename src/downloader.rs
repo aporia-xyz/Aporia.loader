@@ -2,12 +2,79 @@
 
 use std::path::Path;
 use std::fs;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::Arc;
 
-use anyhow::Context;
-use futures::future::join_all;
-use tokio::io::AsyncWriteExt;
+/// Загрузить файл по URL
+pub async fn download_file(url: &str, output: &str) -> anyhow::Result<()> {
+    // Создаем директорию если нужно
+    if let Some(parent) = Path::new(output).parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    // Просто качаем и пишем
+    let client = reqwest::Client::new();
+    let response = client.get(url).send().await?;
+    let bytes = response.bytes().await?;
+    
+    fs::write(output, &bytes)?;
+    Ok(())
+}
+
+pub struct Downloader;
+
+impl Downloader {
+    /// Загрузить файл по URL
+    pub async fn download(url: &str, output: &str) -> anyhow::Result<u64> {
+        download_file(url, output).await?;
+        
+        let size = fs::metadata(output)?.len();
+        Ok(size)
+    }
+
+    /// Загрузить моды
+    pub async fn download_mods(mods_path: &str, mods: &[Mod]) -> Vec<(String, bool)> {
+        let mut results = Vec::new();
+        
+        if let Err(e) = fs::create_dir_all(mods_path) {
+            log::error!("Failed to create mods directory: {}", e);
+            return results;
+        }
+
+        for mod_info in mods {
+            if !mod_info.selected {
+                continue;
+            }
+
+            let filename = mod_info.url.split('/').last().unwrap_or("unknown.jar");
+            let decoded_filename = urlencoding::decode(filename)
+                .unwrap_or(std::borrow::Cow::Borrowed(filename))
+                .to_string();
+            
+            let output_path = Path::new(mods_path).join(&decoded_filename);
+            
+            if output_path.exists() {
+                results.push((mod_info.name.clone(), true));
+                continue;
+            }
+
+            match download_file(&mod_info.url, output_path.to_str().unwrap()).await {
+                Ok(_) => {
+                    results.push((mod_info.name.clone(), true));
+                }
+                Err(e) => {
+                    log::error!("Failed to download mod {}: {}", mod_info.name, e);
+                    results.push((mod_info.name.clone(), false));
+                }
+            }
+        }
+
+        results
+    }
+
+    /// Проверить существование файла
+    pub fn file_exists(path: &str) -> bool {
+        Path::new(path).exists()
+    }
+}
 
 /// Информация о моде
 #[derive(Debug, Clone)]
