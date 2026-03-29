@@ -619,7 +619,8 @@ fn launch_cheat(config: &Config, tx: &mpsc::Sender<String>) {
     
     // Определяем путь в зависимости от ОС
     let versions_path = if cfg!(target_os = "windows") {
-        PathBuf::from(install_path).join("versions").join("Aporia.client")
+        let appdata = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
+        appdata.join("apr").join("versions").join("Aporia.client")
     } else {
         let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
         home.join(".apr").join("versions").join("Aporia.client")
