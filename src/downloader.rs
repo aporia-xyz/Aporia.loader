@@ -37,52 +37,18 @@ pub struct DownloadStats {
 pub struct Downloader;
 
 impl Downloader {
-    /// Загрузить файл по URL (blocking)
+    /// Загрузить файл по URL
     pub async fn download(url: &str, output: &str) -> anyhow::Result<u64> {
-        log::info!("=== DOWNLOAD START ===");
-        log::info!("URL: {}", url);
-        log::info!("Output: {}", output);
+        let client = reqwest::Client::new();
+        let response = client.get(url).send().await?;
+        let bytes = response.bytes().await?;
         
-        // Создаем директорию если нужно
-        let output_path = std::path::Path::new(output);
-        if let Some(parent) = output_path.parent() {
-            log::info!("Creating dir: {}", parent.display());
-            fs::create_dir_all(parent).context("Failed to create directory")?;
+        if let Some(parent) = std::path::Path::new(output).parent() {
+            std::fs::create_dir_all(parent)?;
         }
-
-        // Используем blocking клиент
-        let client = reqwest::blocking::Client::builder()
-            .redirect(reqwest::redirect::Policy::limited(10))
-            .danger_accept_invalid_certs(true)
-            .timeout(std::time::Duration::from_secs(600))
-            .build()
-            .context("Failed to create client")?;
-
-        log::info!("Sending request...");
-        let mut response = client
-            .get(url)
-            .send()
-            .context("Failed to send request")?;
-
-        log::info!("Response status: {}", response.status());
         
-        if !response.status().is_success() {
-            anyhow::bail!("HTTP error: {}", response.status());
-        }
-
-        log::info!("Reading response...");
-        let mut buffer = Vec::new();
-        response.copy_to(&mut buffer).context("Failed to read response")?;
-        
-        log::info!("Got {} bytes", buffer.len());
-        
-        log::info!("Writing to: {}", output);
-        fs::write(output, &buffer).context("Failed to write file")?;
-        
-        log::info!("File written: {} bytes", buffer.len());
-        log::info!("=== DOWNLOAD COMPLETE ===");
-        
-        Ok(buffer.len() as u64)
+        std::fs::write(output, &bytes)?;
+        Ok(bytes.len() as u64)
     }
 
     /// Загрузить файлы параллельно
