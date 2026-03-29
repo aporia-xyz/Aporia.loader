@@ -651,7 +651,7 @@ fn launch_cheat(config: &Config, tx: &mpsc::Sender<String>) {
     
     if should_download_jar {
         log::info!("Downloading JAR from: {}", jar_url);
-        let _ = tx.send("Downloading JAR...".to_string());
+        let _ = tx.send("PROGRESS:0|Downloading JAR...".to_string());
         
         // Удаляем старый файл если существует
         let _ = fs::remove_file(&jar_path);
@@ -660,38 +660,42 @@ fn launch_cheat(config: &Config, tx: &mpsc::Sender<String>) {
         match rt.block_on(Downloader::download(jar_url, jar_path.to_str().unwrap())) {
             Ok(size) => {
                 log::info!("Downloaded JAR: {} bytes", size);
-                let _ = tx.send(format!("Downloaded JAR: {} bytes", size));
+                let _ = tx.send(format!("PROGRESS:50|Downloaded JAR: {} bytes", size));
             }
             Err(e) => {
                 log::error!("Failed to download JAR: {}", e);
-                let _ = tx.send(format!("Failed to download JAR: {}", e));
+                let _ = tx.send(format!("PROGRESS:0|Failed to download JAR: {}", e));
                 return;
             }
         }
     } else {
         log::info!("JAR already exists with valid size");
+        let _ = tx.send("PROGRESS:50|JAR already cached".to_string());
     }
     
     // Скачиваем JSON если не существует
     if !json_path.exists() {
         let json_url = "https://github.com/dakychan/Aporia/releases/download/0.5.0/Aporia.client.json";
         log::info!("Downloading JSON from: {}", json_url);
-        let _ = tx.send("Downloading JSON...".to_string());
+        let _ = tx.send("PROGRESS:60|Downloading JSON...".to_string());
         
         let rt = tokio::runtime::Runtime::new().unwrap();
         match rt.block_on(Downloader::download(json_url, json_path.to_str().unwrap())) {
             Ok(size) => {
                 log::info!("Downloaded JSON: {} bytes", size);
+                let _ = tx.send(format!("PROGRESS:70|Downloaded JSON: {} bytes", size));
             }
             Err(e) => {
                 log::error!("Failed to download JSON: {}", e);
+                let _ = tx.send(format!("PROGRESS:70|JSON download failed: {}", e));
             }
         }
     } else {
         log::info!("JSON already exists");
+        let _ = tx.send("PROGRESS:70|JSON already cached".to_string());
     }
     
-    let _ = tx.send("Launching...".to_string());
+    let _ = tx.send("PROGRESS:90|Launching...".to_string());
     let _ = launch_minecraft_cheat(config, &java_path, &jar_path);
 }
 
@@ -1259,9 +1263,22 @@ impl eframe::App for AporiaApp {
                     if msg == "__COMPLETE__" {
                         self.launch_complete = true;
                         self.is_launching = false;
+                    } else if msg.starts_with("PROGRESS:") {
+                        // Парсим PROGRESS:percentage|message
+                        if let Some(pipe_pos) = msg.find('|') {
+                            let progress_str = &msg[9..pipe_pos]; // Skip "PROGRESS:"
+                            let message = &msg[pipe_pos + 1..];
+                            
+                            if let Ok(progress) = progress_str.parse::<f32>() {
+                                self.launch_progress = progress / 100.0;
+                                self.launch_message = message.to_string();
+                                log::info!("Progress: {}% - {}", progress, message);
+                            }
+                        }
                     } else {
                         self.launch_message = msg.clone();
                         
+                        // Старая логика для обратной совместимости
                         if msg.contains("Java") {
                             self.launch_progress = 0.1;
                         } else if msg.contains("Fabric") || msg.contains("Cheat") {
