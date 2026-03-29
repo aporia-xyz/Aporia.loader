@@ -76,6 +76,7 @@ struct AporiaApp {
     changelog_loading: bool,
     current_changelog_index: usize,
     main_animation: f32, // 0.0 to 1.0 for slide-in
+    changelog_rx: Option<mpsc::Receiver<Vec<ChangelogEntry>>>,
     
     // Launch status
     is_launching: bool,
@@ -106,6 +107,7 @@ impl Default for AporiaApp {
             changelog_loading: false,
             current_changelog_index: 0,
             main_animation: 0.0,
+            changelog_rx: None,
             is_launching: false,
             launch_progress: 0.0,
             launch_message: String::new(),
@@ -169,7 +171,10 @@ impl AporiaApp {
         
         log::info!("Loading changelog from GitHub");
         
-        std::thread::spawn(|| {
+        let (tx, rx) = mpsc::channel::<Vec<ChangelogEntry>>();
+        self.changelog_rx = Some(rx);
+        
+        std::thread::spawn(move || {
             let rt = tokio::runtime::Runtime::new().unwrap();
             let result = rt.block_on(async {
                 match fetch_aporia_releases().await {
@@ -186,7 +191,7 @@ impl AporiaApp {
                     }
                 }
             });
-            result
+            let _ = tx.send(result);
         });
         
         self.changelog_loading = false;
@@ -1129,6 +1134,15 @@ impl eframe::App for AporiaApp {
         if !LOGGED.swap(true, std::sync::atomic::Ordering::SeqCst) {
             let available_rect = ctx.available_rect();
             log::info!("Actual window size: {}x{}", available_rect.width(), available_rect.height());
+        }
+        
+        // Проверяем получение changelog из канала
+        if let Some(rx) = &self.changelog_rx {
+            if let Ok(entries) = rx.try_recv() {
+                log::info!("Received {} changelog entries from thread", entries.len());
+                self.changelog = entries;
+                self.changelog_rx = None;
+            }
         }
         
         if self.is_launching {
