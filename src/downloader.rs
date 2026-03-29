@@ -45,6 +45,8 @@ impl Downloader {
             .build()
             .context("Failed to create HTTP client")?;
 
+        log::info!("Starting download from: {}", url);
+        
         let response = client
             .get(url)
             .send()
@@ -56,35 +58,70 @@ impl Downloader {
         }
 
         let total_size = response.content_length().unwrap_or(0);
-        log::info!("Downloading {} bytes from {}", total_size, url);
+        log::info!("Total size: {} bytes", total_size);
         
         // Создаем директорию если нужно
         if let Some(parent) = Path::new(output).parent() {
             fs::create_dir_all(parent).context("Failed to create directory")?;
         }
 
+        log::info!("Creating file: {}", output);
         let mut file = tokio::fs::File::create(output)
             .await
             .context("Failed to create file")?;
         
         let mut stream = response.bytes_stream();
         let mut downloaded: u64 = 0;
+        let mut chunk_count = 0;
         
         use futures::stream::StreamExt;
         
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk.context("Failed to read chunk")?;
-            file.write_all(&chunk).await.context("Failed to write chunk")?;
-            downloaded += chunk.len() as u64;
-            
-            // Логируем прогресс каждые 10MB
-            if total_size > 0 && downloaded % (10 * 1024 * 1024) == 0 {
-                let percent = (downloaded as f64 / total_size as f64 * 100.0) as u32;
-                log::info!("Download progress: {}% ({}/{}MB)", percent, downloaded / 1_000_000, total_size / 1_000_000);
+        while let Some(chunk_result) = stream.next().await {
+            match chunk_result {
+                Ok(chunk) => {
+                    chunk_count += 1;
+                    let chunk_size = chunk.len() as u64;
+                    
+                    match file.write_all(&chunk).await {
+                        Ok(_) => {
+                            downloaded += chunk_size;
+                            
+                            // Логируем прогресс каждые 50MB
+                            if total_size > 0 && downloaded % (50 * 1024 * 1024) < chunk_size {
+                                let percent = (downloaded as f64 / total_size as f64 * 100.0) as u32;
+                                log::info!("Download progress: {}% ({}/{}MB)", 
+                                    percent, 
+                                    downloaded / 1_000_000, 
+                                    total_size / 1_000_000);
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("Failed to write chunk {}: {}", chunk_count, e);
+                            return Err(e.into());
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::error!("Failed to read chunk {}: {}", chunk_count, e);
+                    return Err(e.into());
+                }
             }
         }
         
-        log::info!("Download complete: {} bytes", downloaded);
+        // Flush и sync для гарантии записи
+        file.flush().await.context("Failed to flush file")?;
+        file.sync_all().await.context("Failed to sync file")?;
+        
+        log::info!("Download complete: {} bytes in {} chunks", downloaded, chunk_count);
+        
+        // Проверяем что файл действительно создан
+        let metadata = tokio::fs::metadata(output).await.context("Failed to get file metadata")?;
+        log::info!("File size on disk: {} bytes", metadata.len());
+        
+        if metadata.len() == 0 {
+            anyhow::bail!("Downloaded file is empty!");
+        }
+        
         Ok(downloaded)
     }
 
