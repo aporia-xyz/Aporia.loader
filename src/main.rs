@@ -615,7 +615,7 @@ fn launch_cheat(config: &Config, tx: &mpsc::Sender<String>) {
     let _ = tx.send("Checking Java...".to_string());
     let java_path = ensure_java(install_path, tx);
     
-    let _ = tx.send("Downloading MCP client...".to_string());
+    let _ = tx.send("PROGRESS:0|Preparing MCP client...".to_string());
     
     // Определяем путь в зависимости от ОС
     let versions_path = if cfg!(target_os = "windows") {
@@ -640,8 +640,8 @@ fn launch_cheat(config: &Config, tx: &mpsc::Sender<String>) {
             Ok(metadata) => {
                 let size = metadata.len();
                 log::info!("JAR exists with size: {} bytes", size);
-                // Если файл меньше 1MB, скачиваем заново
-                size < 1_000_000
+                // Если файл меньше 100MB, скачиваем заново (JAR должен быть ~517MB)
+                size < 100_000_000
             }
             Err(_) => true,
         }
@@ -651,7 +651,7 @@ fn launch_cheat(config: &Config, tx: &mpsc::Sender<String>) {
     
     if should_download_jar {
         log::info!("Downloading JAR from: {}", jar_url);
-        let _ = tx.send("PROGRESS:0|Downloading JAR...".to_string());
+        let _ = tx.send("PROGRESS:5|Downloading JAR (this may take a while)...".to_string());
         
         // Удаляем старый файл если существует
         let _ = fs::remove_file(&jar_path);
@@ -660,7 +660,8 @@ fn launch_cheat(config: &Config, tx: &mpsc::Sender<String>) {
         match rt.block_on(Downloader::download(jar_url, jar_path.to_str().unwrap())) {
             Ok(size) => {
                 log::info!("Downloaded JAR: {} bytes", size);
-                let _ = tx.send(format!("PROGRESS:50|Downloaded JAR: {} bytes", size));
+                let size_mb = size / 1_000_000;
+                let _ = tx.send(format!("PROGRESS:50|Downloaded JAR: {}MB", size_mb));
             }
             Err(e) => {
                 log::error!("Failed to download JAR: {}", e);
