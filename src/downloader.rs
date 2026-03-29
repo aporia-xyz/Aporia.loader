@@ -39,6 +39,10 @@ pub struct Downloader;
 impl Downloader {
     /// Загрузить файл по URL
     pub async fn download(url: &str, output: &str) -> anyhow::Result<u64> {
+        log::info!("=== DOWNLOAD START ===");
+        log::info!("URL: {}", url);
+        log::info!("Output path: {}", output);
+        
         let client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::limited(10))
             .danger_accept_invalid_certs(true)
@@ -46,7 +50,7 @@ impl Downloader {
             .build()
             .context("Failed to create HTTP client")?;
 
-        log::info!("Downloading from: {}", url);
+        log::info!("Sending request...");
         
         let response = client
             .get(url)
@@ -59,25 +63,28 @@ impl Downloader {
         }
 
         let total_size = response.content_length().unwrap_or(0);
-        log::info!("Total size: {:.1}MB", total_size as f64 / 1_000_000.0);
+        log::info!("Response OK, size: {:.1}MB", total_size as f64 / 1_000_000.0);
         
         // Создаем директорию если нужно
-        if let Some(parent) = Path::new(output).parent() {
+        let output_path = std::path::Path::new(output);
+        if let Some(parent) = output_path.parent() {
+            log::info!("Creating directory: {}", parent.display());
             fs::create_dir_all(parent).context("Failed to create directory")?;
+            log::info!("Directory created");
         }
 
-        log::info!("Downloading to: {}", output);
-        
-        // Просто скачиваем весь файл в памяти и пишем
+        log::info!("Reading bytes from response...");
         let bytes = response.bytes().await.context("Failed to download bytes")?;
-        log::info!("Downloaded {:.1}MB to memory", bytes.len() as f64 / 1_000_000.0);
+        log::info!("Got {:.1}MB in memory", bytes.len() as f64 / 1_000_000.0);
         
-        // Пишем на диск
+        log::info!("Writing to disk: {}", output);
         tokio::fs::write(output, &bytes)
             .await
             .context("Failed to write file")?;
         
-        log::info!("File written: {:.1}MB", bytes.len() as f64 / 1_000_000.0);
+        log::info!("File written successfully: {:.1}MB", bytes.len() as f64 / 1_000_000.0);
+        log::info!("=== DOWNLOAD COMPLETE ===");
+        
         Ok(bytes.len() as u64)
     }
 
