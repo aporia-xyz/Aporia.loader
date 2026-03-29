@@ -25,22 +25,29 @@ const VERSION: &str = "0.3.0";
 /// Доступные версии Minecraft
 #[derive(Debug, Clone, PartialEq)]
 enum McVersion {
-    Fabric121,
-    CheatLatest,
+    Fabric,
+    MCP,
 }
 
 impl McVersion {
     fn name(&self) -> &'static str {
         match self {
-            McVersion::Fabric121 => "Fabric 1.21.11 (Modded)",
-            McVersion::CheatLatest => "Cheat Latest (Standalone)",
+            McVersion::Fabric => "Fabric 1.21.11 (Modded)",
+            McVersion::MCP => "MCP v (last build)",
+        }
+    }
+    
+    fn branch(&self) -> &'static str {
+        match self {
+            McVersion::Fabric => "fabric",
+            McVersion::MCP => "mcp",
         }
     }
     
     fn id(&self) -> &'static str {
         match self {
-            McVersion::Fabric121 => "fabric-1.21.11",
-            McVersion::CheatLatest => "cheat-latest",
+            McVersion::Fabric => "fabric-1.21.11",
+            McVersion::MCP => "mcp-latest",
         }
     }
 }
@@ -69,14 +76,18 @@ struct AporiaApp {
     
     // Login screen
     username_input: String,
-    login_animation: f32, // 0.0 to 1.0
+    login_animation: f32,
     
     // Main screen
     changelog: Vec<ChangelogEntry>,
     changelog_loading: bool,
     current_changelog_index: usize,
-    main_animation: f32, // 0.0 to 1.0 for slide-in
+    main_animation: f32,
     changelog_rx: Option<mpsc::Receiver<Vec<ChangelogEntry>>>,
+    
+    // Commits for versions
+    version_commits: Vec<String>,
+    commits_rx: Option<mpsc::Receiver<Vec<String>>>,
     
     // Launch status
     is_launching: bool,
@@ -100,7 +111,7 @@ impl Default for AporiaApp {
         Self {
             state: AppState::Login,
             config: config.clone(),
-            selected_version: McVersion::Fabric121,
+            selected_version: McVersion::Fabric,
             username_input: config.username.clone(),
             login_animation: 0.0,
             changelog: Vec::new(),
@@ -108,6 +119,8 @@ impl Default for AporiaApp {
             current_changelog_index: 0,
             main_animation: 0.0,
             changelog_rx: None,
+            version_commits: Vec::new(),
+            commits_rx: None,
             is_launching: false,
             launch_progress: 0.0,
             launch_message: String::new(),
@@ -162,6 +175,36 @@ impl AporiaApp {
         let mut app = Self::default();
         app.load_changelog();
         app
+    }
+    
+    /// Загрузка коммитов для версии
+    fn load_commits(&mut self) {
+        let branch = self.selected_version.branch().to_string();
+        
+        log::info!("Loading commits from branch: {}", branch);
+        
+        let (tx, rx) = mpsc::channel::<Vec<String>>();
+        self.commits_rx = Some(rx);
+        
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            let result = rt.block_on(async {
+                match fetch_commits_for_version(&branch).await {
+                    Ok(commits) => {
+                        log::info!("Successfully loaded {} commits from {}", commits.len(), branch);
+                        for (i, commit) in commits.iter().take(5).enumerate() {
+                            log::info!("  {}: {}", i + 1, commit);
+                        }
+                        commits
+                    }
+                    Err(e) => {
+                        log::error!("Failed to load commits: {}", e);
+                        vec!["Failed to load commits".to_string()]
+                    }
+                }
+            });
+            let _ = tx.send(result);
+        });
     }
     
     /// Загрузка changelog из GitHub
@@ -271,7 +314,7 @@ impl AporiaApp {
         self.main_animation = (self.main_animation + 0.08).min(1.0);
         
         ui.horizontal(|ui| {
-            // Левая панель - описание и кнопки
+            // Левая панель - версия и коммиты
             ui.vertical(|ui| {
                 ui.add_space(20.0);
                 
@@ -291,58 +334,6 @@ impl AporiaApp {
                 
                 ui.add_space(30.0);
                 
-                // Описание версии с навигацией
-                if !self.changelog.is_empty() {
-                    let entry = &self.changelog[self.current_changelog_index];
-                    
-                    ui.label(
-                        egui::RichText::new(&entry.version)
-                            .size(20.0)
-                            .strong()
-                            .color(egui::Color32::from_rgb(120, 180, 200))
-                    );
-                    
-                    ui.label(
-                        egui::RichText::new(&entry.date)
-                            .size(11.0)
-                            .color(egui::Color32::from_rgb(120, 120, 130))
-                    );
-                    
-                    ui.add_space(15.0);
-                    
-                    // Описание с прокруткой
-                    egui::ScrollArea::vertical().max_height(150.0).show(ui, |ui| {
-                        for change in &entry.changes {
-                            ui.label(
-                                egui::RichText::new(format!("• {}", change))
-                                    .size(12.0)
-                                    .color(egui::Color32::from_rgb(180, 180, 190))
-                            );
-                        }
-                    });
-                    
-                    ui.add_space(20.0);
-                    
-                    // Кнопки навигации
-                    ui.horizontal(|ui| {
-                        if ui.button("◀ Prev").clicked() && self.current_changelog_index > 0 {
-                            self.current_changelog_index -= 1;
-                        }
-                        
-                        ui.label(
-                            egui::RichText::new(format!("{}/{}", self.current_changelog_index + 1, self.changelog.len()))
-                                .size(12.0)
-                                .color(egui::Color32::from_rgb(150, 150, 160))
-                        );
-                        
-                        if ui.button("Next ▶").clicked() && self.current_changelog_index < self.changelog.len() - 1 {
-                            self.current_changelog_index += 1;
-                        }
-                    });
-                }
-                
-                ui.add_space(40.0);
-                
                 // Версия сверху
                 ui.label(
                     egui::RichText::new("Version")
@@ -352,14 +343,49 @@ impl AporiaApp {
                 );
                 ui.add_space(8.0);
                 
+                let old_version = self.selected_version.clone();
                 egui::ComboBox::from_label("")
                     .selected_text(self.selected_version.name())
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.selected_version, McVersion::Fabric121, "Fabric 1.21.11");
-                        ui.selectable_value(&mut self.selected_version, McVersion::CheatLatest, "Cheat Latest");
+                        ui.selectable_value(&mut self.selected_version, McVersion::Fabric, "Fabric 1.21.11 (Modded)");
+                        ui.selectable_value(&mut self.selected_version, McVersion::MCP, "MCP v (last build)");
                     });
                 
+                // Если версия изменилась, загружаем новые коммиты
+                if old_version != self.selected_version {
+                    self.load_commits();
+                }
+                
                 ui.add_space(30.0);
+                
+                // Коммиты текущей версии
+                ui.label(
+                    egui::RichText::new(format!("Latest commits ({})", self.selected_version.branch()))
+                        .size(14.0)
+                        .strong()
+                        .color(egui::Color32::from_rgb(200, 200, 210))
+                );
+                ui.add_space(10.0);
+                
+                egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
+                    for (i, commit) in self.version_commits.iter().take(10).enumerate() {
+                        ui.label(
+                            egui::RichText::new(format!("{}. {}", i + 1, commit))
+                                .size(11.0)
+                                .color(egui::Color32::from_rgb(180, 180, 190))
+                        );
+                    }
+                    
+                    if self.version_commits.is_empty() {
+                        ui.label(
+                            egui::RichText::new("Loading commits...")
+                                .size(11.0)
+                                .color(egui::Color32::from_rgb(120, 120, 130))
+                        );
+                    }
+                });
+                
+                ui.add_space(40.0);
                 
                 // Кнопка запуска внизу - контрастная
                 let button_text = if self.is_launching {
@@ -411,7 +437,7 @@ impl AporiaApp {
                 );
                 ui.add_space(12.0);
                 
-                egui::ScrollArea::vertical().max_height(500.0).show(ui, |ui| {
+                egui::ScrollArea::vertical().max_height(600.0).show(ui, |ui| {
                     for (idx, entry) in self.changelog.iter().enumerate() {
                         let is_selected = idx == self.current_changelog_index;
                         let bg_color = if is_selected {
@@ -504,10 +530,10 @@ impl AporiaApp {
             let _ = tx.send("Checking Java...".to_string());
             
             match version {
-                McVersion::Fabric121 => {
+                McVersion::Fabric => {
                     launch_fabric(&config, &mods, &tx);
                 }
-                McVersion::CheatLatest => {
+                McVersion::MCP => {
                     launch_cheat(&config, &tx);
                 }
             }
@@ -1142,6 +1168,15 @@ impl eframe::App for AporiaApp {
                 log::info!("Received {} changelog entries from thread", entries.len());
                 self.changelog = entries;
                 self.changelog_rx = None;
+            }
+        }
+        
+        // Проверяем получение коммитов из канала
+        if let Some(rx) = &self.commits_rx {
+            if let Ok(commits) = rx.try_recv() {
+                log::info!("Received {} commits from thread", commits.len());
+                self.version_commits = commits;
+                self.commits_rx = None;
             }
         }
         
