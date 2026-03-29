@@ -170,7 +170,11 @@ impl AporiaApp {
         std::thread::spawn(|| {
             let rt = tokio::runtime::Runtime::new().unwrap();
             let _ = rt.block_on(async {
-                let _ = fetch_releases_from_github().await;
+                // Загружаем релизы Aporia чита
+                if let Ok(entries) = fetch_aporia_releases().await {
+                    return entries;
+                }
+                default_changelog()
             });
         });
         
@@ -380,11 +384,11 @@ impl AporiaApp {
             
             ui.add_space(40.0);
             
-            // Правая панель - чейнджлог релизов
+            // Правая панель - релизы Aporia чита
             ui.vertical(|ui| {
                 ui.add_space(20.0);
                 ui.label(
-                    egui::RichText::new("Releases")
+                    egui::RichText::new("Aporia Releases")
                         .size(16.0)
                         .strong()
                         .color(egui::Color32::from_rgb(200, 200, 210))
@@ -993,11 +997,11 @@ fn default_changelog() -> Vec<ChangelogEntry> {
     ]
 }
 
-/// Загрузить релизы с GitHub
-async fn fetch_releases_from_github() -> anyhow::Result<Vec<ChangelogEntry>> {
+/// Загрузить релизы Aporia чита
+async fn fetch_aporia_releases() -> anyhow::Result<Vec<ChangelogEntry>> {
     let client = reqwest::Client::new();
     
-    // Получаем релизы
+    // Получаем релизы Aporia чита
     let releases_url = "https://api.github.com/repos/dakychan/Aporia/releases";
     let response = client
         .get(releases_url)
@@ -1008,7 +1012,7 @@ async fn fetch_releases_from_github() -> anyhow::Result<Vec<ChangelogEntry>> {
     let releases: Vec<JsonValue> = response.json().await?;
     let mut entries = Vec::new();
     
-    for release in releases.iter().take(10) {
+    for release in releases.iter().take(15) {
         if let (Some(tag), Some(body)) = (
             release.get("tag_name").and_then(|v| v.as_str()),
             release.get("body").and_then(|v| v.as_str()),
@@ -1024,14 +1028,19 @@ async fn fetch_releases_from_github() -> anyhow::Result<Vec<ChangelogEntry>> {
             // Парсим чейнджлог из body
             let changes: Vec<String> = body
                 .lines()
-                .filter(|line| line.trim().starts_with('-') || line.trim().starts_with('*'))
+                .filter(|line| {
+                    let trimmed = line.trim();
+                    trimmed.starts_with('-') || trimmed.starts_with('*') || trimmed.starts_with('+')
+                })
                 .map(|line| {
                     line.trim()
                         .trim_start_matches('-')
                         .trim_start_matches('*')
+                        .trim_start_matches('+')
                         .trim()
                         .to_string()
                 })
+                .filter(|s| !s.is_empty())
                 .collect();
             
             entries.push(ChangelogEntry {
@@ -1053,12 +1062,12 @@ async fn fetch_releases_from_github() -> anyhow::Result<Vec<ChangelogEntry>> {
     })
 }
 
-/// Загрузить коммиты для версии
+/// Загрузить коммиты для версии из ветки
 async fn fetch_commits_for_version(branch: &str) -> anyhow::Result<Vec<String>> {
     let client = reqwest::Client::new();
     
     let commits_url = format!(
-        "https://api.github.com/repos/dakychan/Aporia/commits?sha={}&per_page=20",
+        "https://api.github.com/repos/dakychan/Aporia/commits?sha={}&per_page=30",
         branch
     );
     
@@ -1077,7 +1086,10 @@ async fn fetch_commits_for_version(branch: &str) -> anyhow::Result<Vec<String>> 
             .and_then(|c| c.get("message"))
             .and_then(|m| m.as_str())
         {
-            messages.push(msg.lines().next().unwrap_or("").to_string());
+            let first_line = msg.lines().next().unwrap_or("").to_string();
+            if !first_line.is_empty() {
+                messages.push(first_line);
+            }
         }
     }
     
