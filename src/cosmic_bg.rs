@@ -1,6 +1,7 @@
 //! Космический фон с звездами и кометами
 
 use eframe::egui;
+use rand::Rng;
 use std::time::Instant;
 
 /// Звезда на фоне
@@ -30,23 +31,23 @@ struct Comet {
 
 impl Comet {
     fn new(screen_width: f32, screen_height: f32) -> Self {
-        let angle = (rand::random::<f32>() * 20.0 + 30.0).to_radians();
-        let speed = rand::random::<f32>() * 6.0 + 5.0;
+        let angle = (rand::thread_rng().gen::<f32>() * 20.0 + 30.0).to_radians();
+        let speed = rand::thread_rng().gen::<f32>() * 6.0 + 5.0;
 
         Self {
-            x: screen_width + rand::random::<f32>() * 400.0,
-            y: -rand::random::<f32>() * 300.0,
+            x: screen_width + rand::thread_rng().gen::<f32>() * 400.0,
+            y: -rand::thread_rng().gen::<f32>() * 300.0,
             vx: -angle.cos() * speed,
             vy: angle.sin() * speed,
-            tail_len: rand::random::<f32>() * 80.0 + 100.0,
-            width: rand::random::<f32>() * 2.0 + 1.5,
-            hue: if rand::random::<f32>() > 0.5 {
+            tail_len: rand::thread_rng().gen::<f32>() * 80.0 + 100.0,
+            width: rand::thread_rng().gen::<f32>() * 2.0 + 1.5,
+            hue: if rand::thread_rng().gen::<f32>() > 0.5 {
                 260.0
             } else {
                 220.0
             },
             life: 1.0,
-            decay: rand::random::<f32>() * 0.002 + 0.0015,
+            decay: rand::thread_rng().gen::<f32>() * 0.002 + 0.0015,
         }
     }
 
@@ -82,12 +83,12 @@ impl CosmicBackground {
         let mut stars = Vec::new();
         for _ in 0..320 {
             stars.push(Star {
-                x: rand::random::<f32>() * 3000.0 - 500.0,
-                y: rand::random::<f32>() * 2000.0 - 200.0,
-                radius: rand::random::<f32>() * 1.4 + 0.3,
-                base_alpha: rand::random::<f32>() * 0.6 + 0.2,
-                phase: rand::random::<f32>() * std::f32::consts::PI * 2.0,
-                speed: rand::random::<f32>() * 0.5 + 0.3,
+                x: rand::thread_rng().gen::<f32>() * 3000.0 - 500.0,
+                y: rand::thread_rng().gen::<f32>() * 2000.0 - 200.0,
+                radius: rand::thread_rng().gen::<f32>() * 1.4 + 0.3,
+                base_alpha: rand::thread_rng().gen::<f32>() * 0.6 + 0.2,
+                phase: rand::thread_rng().gen::<f32>() * std::f32::consts::PI * 2.0,
+                speed: rand::thread_rng().gen::<f32>() * 0.5 + 0.3,
             });
         }
 
@@ -96,7 +97,7 @@ impl CosmicBackground {
             comets: Vec::new(),
             start_time: Instant::now(),
             last_flash: 0.0,
-            next_flash_at: rand::random::<f32>() * 3.0 + 2.0,
+            next_flash_at: rand::thread_rng().gen::<f32>() * 3.0 + 2.0,
             flash_alpha: 0.0,
         }
     }
@@ -238,7 +239,7 @@ impl CosmicBackground {
         if self.last_flash > self.next_flash_at {
             self.flash_alpha = 1.0;
             self.last_flash = 0.0;
-            self.next_flash_at = rand::random::<f32>() * 5.0 + 3.0;
+            self.next_flash_at = rand::thread_rng().gen::<f32>() * 5.0 + 3.0;
         }
 
         if self.flash_alpha > 0.0 {
