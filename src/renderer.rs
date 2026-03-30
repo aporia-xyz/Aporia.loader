@@ -1,5 +1,6 @@
 use wgpu::*;
 use std::sync::Arc;
+use std::time::Instant;
 use winit::window::Window;
 
 pub struct Renderer {
@@ -8,6 +9,11 @@ pub struct Renderer {
     queue: Queue,
     config: SurfaceConfiguration,
     bloom_pipeline: RenderPipeline,
+    blur_pipeline: RenderPipeline,
+    rect_pipeline: RenderPipeline,
+    uniform_buffer: Buffer,
+    bind_group: BindGroup,
+    start_time: Instant,
 }
 
 impl Renderer {
@@ -58,9 +64,48 @@ impl Renderer {
             source: ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("../shaders/bloom.wgsl"))),
         });
 
+        // Создаём uniform буфер для времени
+        let uniform_buffer = device.create_buffer(&BufferDescriptor {
+            label: Some("uniform_buffer"),
+            size: 4, // f32 = 4 байта
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        // Создаём bind group layout
+        let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: Some("bind_group_layout"),
+            entries: &[BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::FRAGMENT,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+
+        // Создаём bind group
+        let bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("bind_group"),
+            layout: &bind_group_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: uniform_buffer.as_entire_binding(),
+            }],
+        });
+
+        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: Some("pipeline_layout"),
+            bind_group_layouts: &[&bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
         let bloom_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
             label: Some("bloom_pipeline"),
-            layout: None,
+            layout: Some(&pipeline_layout),
             vertex: VertexState {
                 module: &bloom_shader,
                 entry_point: "vs_main",
@@ -95,12 +140,115 @@ impl Renderer {
             multiview: None,
         });
 
+        // Blur пайплайн
+        let blur_shader = device.create_shader_module(ShaderModuleDescriptor {
+            label: Some("blur_shader"),
+            source: ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("../shaders/blur.wgsl"))),
+        });
+
+        let blur_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: Some("blur_pipeline_layout"),
+            bind_group_layouts: &[],
+            push_constant_ranges: &[],
+        });
+
+        let blur_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("blur_pipeline"),
+            layout: Some(&blur_pipeline_layout),
+            vertex: VertexState {
+                module: &blur_shader,
+                entry_point: "vs_main",
+                buffers: &[],
+                compilation_options: Default::default(),
+            },
+            primitive: PrimitiveState {
+                topology: PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: FrontFace::Ccw,
+                cull_mode: None,
+                unclipped_depth: false,
+                polygon_mode: PolygonMode::Fill,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            fragment: Some(FragmentState {
+                module: &blur_shader,
+                entry_point: "fs_main",
+                targets: &[Some(ColorTargetState {
+                    format: config.format,
+                    blend: Some(BlendState::ALPHA_BLENDING),
+                    write_mask: ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            multiview: None,
+        });
+
+        // Rect пайплайн
+        let rect_shader = device.create_shader_module(ShaderModuleDescriptor {
+            label: Some("rect_shader"),
+            source: ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("../shaders/rect.wgsl"))),
+        });
+
+        let rect_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: Some("rect_pipeline_layout"),
+            bind_group_layouts: &[],
+            push_constant_ranges: &[],
+        });
+
+        let rect_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("rect_pipeline"),
+            layout: Some(&rect_pipeline_layout),
+            vertex: VertexState {
+                module: &rect_shader,
+                entry_point: "vs_main",
+                buffers: &[],
+                compilation_options: Default::default(),
+            },
+            primitive: PrimitiveState {
+                topology: PrimitiveTopology::TriangleStrip,
+                strip_index_format: None,
+                front_face: FrontFace::Ccw,
+                cull_mode: None,
+                unclipped_depth: false,
+                polygon_mode: PolygonMode::Fill,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            fragment: Some(FragmentState {
+                module: &rect_shader,
+                entry_point: "fs_main",
+                targets: &[Some(ColorTargetState {
+                    format: config.format,
+                    blend: Some(BlendState::ALPHA_BLENDING),
+                    write_mask: ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            multiview: None,
+        });
+
         Self {
             surface,
             device,
             queue,
             config,
             bloom_pipeline,
+            blur_pipeline,
+            rect_pipeline,
+            uniform_buffer,
+            bind_group,
+            start_time: Instant::now(),
         }
     }
 
@@ -111,6 +259,10 @@ impl Renderer {
     }
 
     pub fn render(&self) {
+        // Обновляем uniform буфер с текущим временем
+        let elapsed = self.start_time.elapsed().as_secs_f32();
+        self.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[elapsed]));
+
         let frame = self.surface.get_current_texture().unwrap();
         let view = frame.texture.create_view(&TextureViewDescriptor::default());
 
@@ -139,8 +291,18 @@ impl Renderer {
                 occlusion_query_set: None,
             });
 
+            // Рисуем bloom слой (фон, звёзды, кометы)
             render_pass.set_pipeline(&self.bloom_pipeline);
+            render_pass.set_bind_group(0, &self.bind_group, &[]);
             render_pass.draw(0..6, 0..1);
+
+            // Рисуем blur слой
+            render_pass.set_pipeline(&self.blur_pipeline);
+            render_pass.draw(0..6, 0..1);
+
+            // Рисуем rect слой - 4 вертекса
+            render_pass.set_pipeline(&self.rect_pipeline);
+            render_pass.draw(0..4, 0..1);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));

@@ -16,14 +16,14 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     
     // Первый прямоугольник - 75% экрана (левая часть)
     if (uv.x < 1.5) {
-        let color = vec3<f32>(0.02, 0.02, 0.04);
-        return vec4<f32>(color, 0.35);
+        let color = vec3<f32>(0.3, 0.1, 0.5);
+        return vec4<f32>(color, 0.4);
     }
     
     // Второй прямоугольник - 25% экрана (правая часть)
     if (uv.x >= 1.5) {
-        let color = vec3<f32>(0.01, 0.01, 0.02);
-        return vec4<f32>(color, 0.55);
+        let color = vec3<f32>(0.2, 0.05, 0.3);
+        return vec4<f32>(color, 0.6);
     }
     
     return vec4<f32>(0.0, 0.0, 0.0, 0.0);
