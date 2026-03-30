@@ -15,12 +15,18 @@ const HTML_CONTENT: &str = include_str!("../index.html");
 
 fn main() -> Result<()> {
     env_logger::init();
+    
+    log::info!("Aporia Loader starting...");
 
     let event_loop = EventLoop::new();
+    log::info!("Event loop created");
+    
     let window = WindowBuilder::new()
         .with_title("Aporia Loader v0.5.0")
         .with_inner_size(LogicalSize::new(1400.0, 800.0))
         .build(&event_loop)?;
+    
+    log::info!("Window created");
 
     log::info!("HTML loaded from embedded resource, size: {} bytes", HTML_CONTENT.len());
 

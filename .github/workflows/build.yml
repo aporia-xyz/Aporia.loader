@@ -88,6 +88,13 @@ jobs:
         cp vcredist/System64/vcruntime140.dll target/${{ matrix.platform.target }}/release/ || true
         cp vcredist/System64/vcruntime140_1.dll target/${{ matrix.platform.target }}/release/ || true
         cp vcredist/System64/msvcp140.dll target/${{ matrix.platform.target }}/release/ || true
+        
+    - name: Create Windows installer info (Windows)
+      if: matrix.platform.os == 'windows-latest'
+      shell: bash
+      run: |
+        echo "WebView2 Runtime required: https://developer.microsoft.com/en-us/microsoft-edge/webview2/" > target/${{ matrix.platform.target }}/release/README_WINDOWS.txt
+        echo "Visual C++ Runtime included in this package" >> target/${{ matrix.platform.target }}/release/README_WINDOWS.txt
       
     - name: Rename artifact
       shell: bash
@@ -106,6 +113,7 @@ jobs:
         path: |
           target/${{ matrix.platform.target }}/release/aporia-loader-*
           target/${{ matrix.platform.target }}/release/*.dll
+          target/${{ matrix.platform.target }}/release/README_*.txt
         
   release:
     name: Create Release
