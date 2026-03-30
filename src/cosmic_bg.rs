@@ -85,8 +85,8 @@ impl CosmicBackground {
             stars.push(Star {
                 x: rand::thread_rng().gen::<f32>() * 3000.0 - 500.0,
                 y: rand::thread_rng().gen::<f32>() * 2000.0 - 200.0,
-                radius: rand::thread_rng().gen::<f32>() * 1.4 + 0.3,
-                base_alpha: rand::thread_rng().gen::<f32>() * 0.6 + 0.2,
+                radius: rand::thread_rng().gen::<f32>() * 0.6 + 0.15, // Меньше радиус
+                base_alpha: rand::thread_rng().gen::<f32>() * 0.3 + 0.1, // Мягче и темнее
                 phase: rand::thread_rng().gen::<f32>() * std::f32::consts::PI * 2.0,
                 speed: rand::thread_rng().gen::<f32>() * 0.5 + 0.3,
             });
