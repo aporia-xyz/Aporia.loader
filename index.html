@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aporia Launcher</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;400;600;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+  :root {
+    --bg: #06060e;
+    --card: rgba(14, 14, 28, 0.65);
+    --card-border: rgba(140, 90, 255, 0.12);
+    --accent: #8b5cf6;
+    --accent-glow: rgba(139, 92, 246, 0.5);
+    --accent-warm: #a78bfa;
+    --fg: #e8e6f0;
+    --muted: #7a7790;
+    --dim: #4a4860;
+    --success: #34d399;
+    --border: rgba(255,255,255,0.06);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Outfit', sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    user-select: none;
+  }
+
+  /* === Фоновый Canvas === */
+  #cosmos {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+  }
+
+  /* === Вспышки === */
+  .flash-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.08s ease-out;
+    background: rgba(255, 255, 255, 0.3);
+  }
+  .flash-overlay.active {
+    opacity: 1;
+    transition: opacity 0.02s ease-in;
+  }
+
+  /* === Основной контейнер === */
+  .launcher {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    height: 100vh;
+    padding: 28px;
+    gap: 24px;
+  }
+
+  /* === Стеклянная панель === */
+  .glass {
+    background: var(--card);
+    backdrop-filter: blur(24px) saturate(1.3);
+    -webkit-backdrop-filter: blur(24px) saturate(1.3);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .glass::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(139,92,246,0.3), transparent);
+  }
+
+  /* === Левая панель === */
+  .panel-left {
+    flex: 1.1;
+    display: flex;
+    flex-direction: column;
+    padding: 36px 40px;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 10px;
+  }
+  .brand-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent), #6d28d9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: 900;
+    color: #fff;
+    box-shadow: 0 0 24px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.15);
+    letter-spacing: -1px;
+  }
+  .brand-name {
+    font-size: 32px;
+    font-weight: 900;
+    letter-spacing: -1.5px;
+    background: linear-gradient(135deg, #fff 30%, var(--accent-warm));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .brand-sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 28px;
+    line-height: 1.6;
+    max-width: 380px;
+  }
+  .brand-sub strong {
+    color: var(--accent-warm);
+    font-weight: 600;
+  }
+
+  /* === Селект версии === */
+  .version-block {
+    margin-bottom: 24px;
+  }
+  .version-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--dim);
+    margin-bottom: 8px;
+  }
+  .version-select {
+    width: 100%;
+    max-width: 320px;
+    padding: 10px 16px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--fg);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%237a7790' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+  }
+  .version-select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(139,92,246,0.15);
+  }
+  .version-select option {
+    background: #12121f;
+    color: var(--fg);
+  }
+
+  /* === Коммиты === */
+  .commits-block {
+    flex: 1;
+  }
+  .commits-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--dim);
+    margin-bottom: 14px;
+  }
+  .commit-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    margin-bottom: 6px;
+    transition: background 0.2s;
+    cursor: default;
+  }
+  .commit-item:hover {
+    background: rgba(139,92,246,0.06);
+  }
+  .commit-hash {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+    background: rgba(139,92,246,0.1);
+    padding: 2px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .commit-msg {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+
+  /* === Кнопка Launch === */
+  .launch-wrap {
+    margin-top: auto;
+    padding-top: 20px;
+  }
+  .launch-btn {
+    width: 100%;
+    padding: 16px;
+    border: none;
+    border-radius: 14px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    color: #fff;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, #7c3aed, #6d28d9, #5b21b6);
+    box-shadow: 0 4px 30px rgba(109,40,217,0.4), 0 0 60px rgba(139,92,246,0.15);
+    transition: transform 0.15s, box-shadow 0.25s;
+  }
+  .launch-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 40px rgba(109,40,217,0.55), 0 0 80px rgba(139,92,246,0.25);
+  }
+  .launch-btn:active {
+    transform: translateY(0) scale(0.98);
+  }
+  .launch-btn::after {
+    content: '';
+    position: absolute;
+    top: -50%; left: -50%;
+    width: 200%; height: 200%;
+    background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.15), transparent 60%);
+    pointer-events: none;
+  }
+  .launch-btn .btn-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    position: relative;
+    z-index: 1;
+  }
+  .launch-btn i {
+    font-size: 15px;
+  }
+
+  /* === Прогресс-бар === */
+  .progress-container {
+    display: none;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .progress-container.active {
+    display: block;
+  }
+  .progress-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--dim);
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .progress-bar {
+    width: 100%;
+    height: 6px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 3px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-warm));
+    width: 0%;
+    transition: width 0.3s ease;
+    box-shadow: 0 0 12px var(--accent-glow);
+  }
+
+  /* === Правая панель === */
+  .panel-right {
+    width: 360px;
+    display: flex;
+    flex-direction: column;
+    padding: 36px 28px;
+  }
+  .releases-title {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    margin-bottom: 6px;
+  }
+  .releases-sub {
+    font-size: 12px;
+    color: var(--dim);
+    margin-bottom: 20px;
+  }
+
+  .releases-list {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .releases-list::-webkit-scrollbar {
+    width: 4px;
+  }
+  .releases-list::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .releases-list::-webkit-scrollbar-thumb {
+    background: rgba(139,92,246,0.2);
+    border-radius: 4px;
+  }
+
+  .release-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-radius: 12px;
+    margin-bottom: 4px;
+    border: 1px solid transparent;
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+  .release-item:hover {
+    background: rgba(139,92,246,0.06);
+    border-color: rgba(139,92,246,0.12);
+  }
+  .release-item.latest {
+    background: rgba(139,92,246,0.08);
+    border-color: rgba(139,92,246,0.2);
+  }
+  .release-item.latest .release-ver {
+    color: var(--accent-warm);
+  }
+  .release-ver {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--fg);
+  }
+  .release-date {
+    font-size: 12px;
+    color: var(--dim);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .release-badge {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--success);
+    background: rgba(52,211,153,0.1);
+    padding: 3px 8px;
+    border-radius: 6px;
+    margin-left: 10px;
+  }
+  .release-left {
+    display: flex;
+    align-items: center;
+  }
+
+  /* === Нижняя строка === */
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 8px rgba(52,211,153,0.5);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .status-text {
+    font-size: 11px;
+    color: var(--dim);
+  }
+  .status-text span {
+    color: var(--muted);
+  }
+
+  /* === Анимации появления === */
+  .panel-left, .panel-right {
+    animation: panelIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .panel-right {
+    animation-delay: 0.15s;
+  }
+  @keyframes panelIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px) scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .brand { animation: fadeSlide 0.6s 0.3s both; }
+  .brand-sub { animation: fadeSlide 0.6s 0.4s both; }
+  .version-block { animation: fadeSlide 0.6s 0.5s both; }
+  .commits-block { animation: fadeSlide 0.6s 0.55s both; }
+  .launch-wrap { animation: fadeSlide 0.6s 0.65s both; }
+  .releases-title { animation: fadeSlide 0.6s 0.45s both; }
+  .releases-sub { animation: fadeSlide 0.6s 0.5s both; }
+
+  @keyframes fadeSlide {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .commit-item:nth-child(1) { animation: fadeSlide 0.5s 0.6s both; }
+  .commit-item:nth-child(2) { animation: fadeSlide 0.5s 0.68s both; }
+  .commit-item:nth-child(3) { animation: fadeSlide 0.5s 0.76s both; }
+
+  .release-item:nth-child(1) { animation: fadeSlide 0.4s 0.55s both; }
+  .release-item:nth-child(2) { animation: fadeSlide 0.4s 0.6s both; }
+  .release-item:nth-child(3) { animation: fadeSlide 0.4s 0.65s both; }
+  .release-item:nth-child(4) { animation: fadeSlide 0.4s 0.7s both; }
+  .release-item:nth-child(5) { animation: fadeSlide 0.4s 0.75s both; }
+  .release-item:nth-child(6) { animation: fadeSlide 0.4s 0.8s both; }
+  .release-item:nth-child(7) { animation: fadeSlide 0.4s 0.85s both; }
+
+  /* === Адаптив === */
+  @media (max-width: 800px) {
+    .launcher {
+      flex-direction: column;
+      padding: 16px;
+      gap: 16px;
+    }
+    .panel-right {
+      width: 100%;
+      max-height: 40vh;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="cosmos"></canvas>
+<div class="flash-overlay" id="flashOverlay"></div>
+
+<div class="launcher">
+  <!-- Левая панель -->
+  <div class="glass panel-left">
+    <div class="brand">
+      <div class="brand-icon">A</div>
+      <div class="brand-name">Aporia</div>
+    </div>
+    <p class="brand-sub">
+      Модифицированный клиент с улучшенной производительностью, кастомными фичами и <strong>полной совместимостью</strong> с оригиналом. Быстрее и стабильнее, чем остальные.
+    </p>
+
+    <div class="version-block">
+      <div class="version-label">Version</div>
+      <select class="version-select" id="versionSelect" aria-label="Выбор версии">
+        <option>Loading versions...</option>
+      </select>
+    </div>
+
+    <div class="commits-block">
+      <div class="commits-title" id="commitsTitle">Latest commits (mcp)</div>
+      <div id="commitsList">
+        <!-- Commits will be loaded from GitHub -->
+      </div>
+    </div>
+
+    <div class="launch-wrap">
+      <button class="launch-btn" id="launchBtn" aria-label="Запустить">
+        <span class="btn-content">
+          <i class="fa-solid fa-play"></i>
+          Launch
+        </span>
+      </button>
+      <div class="progress-container" id="progressContainer">
+        <div class="progress-label">
+          <span>Downloading</span>
+          <span id="progressPercent">0%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Правая панель -->
+  <div class="glass panel-right">
+    <div class="releases-title">Aporia Releases</div>
+    <div class="releases-sub">Доступные версии для загрузки</div>
+
+    <div class="releases-list" id="releasesList">
+      <!-- Releases will be loaded from GitHub -->
+    </div>
+
+    <div class="status-bar">
+      <div class="status-dot"></div>
+      <div class="status-text">Сервисы онлайн &mdash; <span>пинг 24ms</span></div>
+    </div>
+</div>
+</div>
+
+<script>
+// Inline logging
+window.debugLog = function(msg) {
+  try {
+    if (window.ipc && window.ipc.postMessage) {
+      window.ipc.postMessage('log:' + msg);
+    }
+  } catch (e) {}
+};
+
+// ============================================================
+// Rust IPC Bridge
+// ============================================================
+if (typeof ipc === 'undefined') {
+  var ipc = window.ipc || {
+    postMessage: (msg) => console.log('IPC:', msg)
+  };
+}
+
+let selectedVersion = '0.5.0';
+let currentBranch = 'mcp';
+
+// ============================================================
+// Canvas Cosmos Background
+// ============================================================
+class CosmosBackground {
+  constructor() {
+    this.canvas = document.getElementById('cosmos');
+    if (!this.canvas) {
+      console.error('Canvas element not found!');
+      return;
+    }
+    
+    this.ctx = this.canvas.getContext('2d');
+    if (!this.ctx) {
+      console.error('Failed to get canvas context!');
+      return;
+    }
+    
+    this.particles = [];
+    this.stars = [];
+    this.resize();
+    this.initStars();
+    console.log('Cosmos initialized with', this.stars.length, 'stars');
+    this.animate();
+    window.addEventListener('resize', () => this.resize());
+  }
+
+  resize() {
+    this.canvas.width = window.innerWidth;
+    this.canvas.height = window.innerHeight;
+    console.log('Canvas resized to:', this.canvas.width, 'x', this.canvas.height);
+  }
+
+  initStars() {
+    const starCount = Math.floor((this.canvas.width * this.canvas.height) / 15000);
+    for (let i = 0; i < starCount; i++) {
+      this.stars.push({
+        x: Math.random() * this.canvas.width,
+        y: Math.random() * this.canvas.height,
+        radius: Math.random() * 1.5,
+        opacity: Math.random() * 0.5 + 0.3,
+        twinkleSpeed: Math.random() * 0.02 + 0.005
+      });
+    }
+  }
+
+  drawStars() {
+    this.stars.forEach(star => {
+      star.opacity += (Math.random() - 0.5) * star.twinkleSpeed;
+      star.opacity = Math.max(0.1, Math.min(1, star.opacity));
+      
+      this.ctx.fillStyle = `rgba(255, 255, 255, ${star.opacity})`;
+      this.ctx.beginPath();
+      this.ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+      this.ctx.fill();
+    });
+  }
+
+  drawNebula() {
+    const gradient = this.ctx.createRadialGradient(
+      this.canvas.width * 0.3, this.canvas.height * 0.3, 0,
+      this.canvas.width * 0.3, this.canvas.height * 0.3, this.canvas.width * 0.8
+    );
+    gradient.addColorStop(0, 'rgba(139, 92, 246, 0.08)');
+    gradient.addColorStop(0.5, 'rgba(109, 40, 217, 0.04)');
+    gradient.addColorStop(1, 'rgba(6, 6, 14, 0)');
+    
+    this.ctx.fillStyle = gradient;
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    const gradient2 = this.ctx.createRadialGradient(
+      this.canvas.width * 0.7, this.canvas.height * 0.6, 0,
+      this.canvas.width * 0.7, this.canvas.height * 0.6, this.canvas.width * 0.6
+    );
+    gradient2.addColorStop(0, 'rgba(168, 85, 247, 0.06)');
+    gradient2.addColorStop(1, 'rgba(6, 6, 14, 0)');
+    
+    this.ctx.fillStyle = gradient2;
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+  }
+
+  animate() {
+    this.ctx.fillStyle = '#06060e';
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    
+    this.drawNebula();
+    this.drawStars();
+    
+    requestAnimationFrame(() => this.animate());
+  }
+}
+
+let cosmosInstance = null;
+
+// Перенаправляем console.log в IPC для логирования в Rust
+const originalLog = console.log;
+const originalError = console.error;
+
+console.log = function(...args) {
+  originalLog.apply(console, args);
+  try {
+    if (window.debugLog) {
+      window.debugLog(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+    }
+  } catch (e) {}
+};
+
+console.error = function(...args) {
+  originalError.apply(console, args);
+  try {
+    if (window.debugLog) {
+      window.debugLog('ERROR: ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+    }
+  } catch (e) {}
+};
+
+// ============================================================
+// Flash Effect
+// ============================================================
+function triggerFlash() {
+  const overlay = document.getElementById('flashOverlay');
+  if (!overlay) return;
+  
+  overlay.classList.add('active');
+  setTimeout(() => {
+    overlay.classList.remove('active');
+  }, 100);
+}
+
+// ============================================================
+// Progress Bar Management
+// ============================================================
+let progressInterval = null;
+
+function showProgress() {
+  const container = document.getElementById('progressContainer');
+  if (container) {
+    container.classList.add('active');
+  }
+}
+
+function hideProgress() {
+  const container = document.getElementById('progressContainer');
+  if (container) {
+    container.classList.remove('active');
+  }
+  if (progressInterval) {
+    clearInterval(progressInterval);
+    progressInterval = null;
+  }
+}
+
+function setProgress(percent) {
+  const fill = document.getElementById('progressFill');
+  const label = document.getElementById('progressPercent');
+  
+  if (fill) {
+    fill.style.width = Math.min(100, Math.max(0, percent)) + '%';
+  }
+  if (label) {
+    label.textContent = Math.round(percent) + '%';
+  }
+  
+  console.log('Progress:', percent + '%');
+}
+
+function simulateProgress() {
+  let progress = 0;
+  showProgress();
+  
+  if (progressInterval) {
+    clearInterval(progressInterval);
+  }
+  
+  progressInterval = setInterval(() => {
+    progress += Math.random() * 15;
+    
+    if (progress > 90) {
+      progress = 90;
+    }
+    
+    setProgress(progress);
+    
+    if (progress >= 90) {
+      clearInterval(progressInterval);
+      progressInterval = null;
+    }
+  }, 300);
+}
+
+// ============================================================
+// Обработка данных от Rust
+// ============================================================
+window.updateReleases = function(releases) {
+  console.log('updateReleases called with:', releases.length, 'items');
+  const list = document.getElementById('releasesList');
+  const select = document.getElementById('versionSelect');
+  
+  if (!list) {
+    console.error('releasesList element not found!');
+    return;
+  }
+  
+  list.innerHTML = '';
+  
+  // Заполняем select
+  if (select) {
+    select.innerHTML = '';
+    releases.forEach(release => {
+      const option = document.createElement('option');
+      option.value = release.tag_name;
+      option.textContent = `v${release.tag_name}${release.is_latest ? ' (latest)' : ''}`;
+      select.appendChild(option);
+    });
+    
+    // Устанавливаем первый релиз как выбранный
+    if (releases.length > 0) {
+      select.value = releases[0].tag_name;
+      selectedVersion = releases[0].tag_name;
+    }
+    
+    // Добавляем обработчик изменения
+    select.addEventListener('change', (e) => {
+      selectedVersion = e.target.value;
+      const version = parseFloat(selectedVersion);
+      const branch = version >= 0.5 ? 'mcp' : 'fabric';
+      loadCommits(branch);
+      triggerFlash();
+    });
+  }
+  
+  releases.forEach((release, idx) => {
+    const item = document.createElement('div');
+    item.className = 'release-item' + (release.is_latest ? ' latest' : '');
+    item.dataset.ver = release.tag_name;
+    
+    const date = new Date(release.published_at).toISOString().split('T')[0];
+    
+    item.innerHTML = `
+      <div class="release-left">
+        <span class="release-ver">v${release.tag_name}</span>
+        ${release.is_latest ? '<span class="release-badge">latest</span>' : ''}
+      </div>
+      <span class="release-date">${date}</span>
+    `;
+    
+    item.addEventListener('click', () => {
+      selectedVersion = release.tag_name;
+      if (select) select.value = release.tag_name;
+      
+      document.querySelectorAll('.release-item').forEach(i => i.classList.remove('latest'));
+      item.classList.add('latest');
+      
+      document.querySelectorAll('.release-badge').forEach(b => b.remove());
+      const badge = document.createElement('span');
+      badge.className = 'release-badge';
+      badge.textContent = 'selected';
+      item.querySelector('.release-left').appendChild(badge);
+      
+      const version = parseFloat(selectedVersion);
+      const branch = version >= 0.5 ? 'mcp' : 'fabric';
+      loadCommits(branch);
+      
+      triggerFlash();
+    });
+    
+    list.appendChild(item);
+  });
+  
+  if (releases.length > 0) {
+    selectedVersion = releases[0].tag_name;
+  }
+  console.log('Releases updated');
+};
+
+window.updateCommits = function(commits, branch) {
+  console.log('updateCommits called with:', commits.length, 'items from', branch);
+  const list = document.getElementById('commitsList');
+  const title = document.getElementById('commitsTitle');
+  
+  if (!list || !title) {
+    console.error('commitsList or commitsTitle element not found!');
+    return;
+  }
+  
+  title.textContent = `Latest commits (${branch})`;
+  list.innerHTML = '';
+  
+  commits.slice(0, 3).forEach(commit => {
+    const item = document.createElement('div');
+    item.className = 'commit-item';
+    item.innerHTML = `
+      <span class="commit-hash">${commit.short_sha}</span>
+      <span class="commit-msg">${commit.message}</span>
+    `;
+    list.appendChild(item);
+  });
+  console.log('Commits updated');
+};
+
+// ============================================================
+// Загрузка данных с GitHub
+// ============================================================
+async function loadReleases() {
+  console.log('=== loadReleases START ===');
+  
+  try {
+    console.log('Fetching from GitHub API...');
+    const res = await fetch('https://api.github.com/repos/dakychan/Aporia/releases', {
+      method: 'GET'
+    });
+    console.log('Fetch response status:', res.status);
+    
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    
+    const data = await res.json();
+    console.log('Releases fetched:', data.length, 'items');
+    
+    const releases = data.map((r, idx) => ({
+      tag_name: r.tag_name,
+      name: r.name || '',
+      published_at: r.published_at,
+      body: r.body || '',
+      is_latest: idx === 0
+    }));
+    window.updateReleases(releases);
+  } catch (e) {
+    console.error('Failed to load releases:', e.message);
+    console.log('Using fallback data...');
+    
+    window.updateReleases([
+      { tag_name: '0.5.0', name: 'Latest', published_at: '2026-03-29T00:00:00Z', body: '', is_latest: true },
+      { tag_name: '0.4.1', name: '', published_at: '2026-03-15T00:00:00Z', body: '', is_latest: false },
+      { tag_name: '0.4.0', name: '', published_at: '2026-02-28T00:00:00Z', body: '', is_latest: false }
+    ]);
+  }
+  console.log('=== loadReleases END ===');
+}
+
+async function loadCommits(branch, retries = 3) {
+  console.log('=== loadCommits START for branch:', branch, '===');
+  currentBranch = branch;
+  
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      console.log(`Fetching commits from GitHub API (attempt ${attempt}/${retries})...`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
+      const res = await fetch(
+        `https://api.github.com/repos/dakychan/Aporia/commits?sha=${branch}&per_page=10`,
+        { signal: controller.signal }
+      );
+      clearTimeout(timeoutId);
+      
+      console.log('Fetch response status:', res.status);
+      
+      if (!res.ok) {
+        throw new Error(`GitHub API error: ${res.status} ${res.statusText}`);
+      }
+      
+      const data = await res.json();
+      
+      if (!Array.isArray(data)) {
+        throw new Error('Invalid response format from GitHub API');
+      }
+      
+      console.log('Commits fetched:', data.length, 'items');
+      
+      const commits = data.map(c => ({
+        sha: c.sha,
+        short_sha: c.sha.substring(0, 7),
+        message: c.commit.message.split('\n')[0]
+      }));
+      window.updateCommits(commits, branch);
+      console.log('=== loadCommits END (SUCCESS) ===');
+      return;
+    } catch (e) {
+      console.error(`Attempt ${attempt} failed:`, e.message);
+      
+      if (attempt === retries) {
+        console.error('All retry attempts failed. Using fallback data...');
+        window.updateCommits([
+          { short_sha: 'a3f8c2d', message: 'fix: исправлен краш при переключении миров' },
+          { short_sha: 'b7e1f4a', message: 'feat: добавлена поддержка шейдеров PBR' },
+          { short_sha: 'c9d2e6b', message: 'perf: оптимизация рендера частиц на 40%' }
+        ], branch);
+      } else {
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      }
+    }
+  }
+  console.log('=== loadCommits END ===');
+}
+
+// ============================================================
+// Интерактивность
+// ============================================================
+
+// Кнопка Launch — эффект при нажатии
+function setupLaunchButton() {
+  const launchBtn = document.getElementById('launchBtn');
+  if (!launchBtn) {
+    console.error('Launch button not found!');
+    return;
+  }
+  
+  launchBtn.addEventListener('click', () => {
+    launchBtn.innerHTML = '<span class="btn-content"><i class="fa-solid fa-spinner fa-spin"></i> Starting...</span>';
+    launchBtn.style.pointerEvents = 'none';
+
+    triggerFlash();
+    setTimeout(triggerFlash, 300);
+
+    // Начинаем симуляцию прогресса
+    simulateProgress();
+
+    ipc.postMessage('download_jre');
+    ipc.postMessage(`download_version:${selectedVersion}`);
+
+    // Завершаем прогресс на 100% через 3 секунды
+    setTimeout(() => {
+      setProgress(100);
+      
+      setTimeout(() => {
+        ipc.postMessage(`launch:${selectedVersion}`);
+        
+        launchBtn.innerHTML = '<span class="btn-content"><i class="fa-solid fa-check"></i> Running</span>';
+        launchBtn.style.background = 'linear-gradient(135deg, #059669, #047857)';
+        launchBtn.style.boxShadow = '0 4px 30px rgba(5,150,105,0.4), 0 0 60px rgba(52,211,153,0.15)';
+        
+        setTimeout(() => {
+          hideProgress();
+        }, 1000);
+      }, 500);
+    }, 3000);
+
+    setTimeout(() => {
+      launchBtn.innerHTML = '<span class="btn-content"><i class="fa-solid fa-play"></i> Launch</span>';
+      launchBtn.style.background = '';
+      launchBtn.style.boxShadow = '';
+      launchBtn.style.pointerEvents = '';
+    }, 5000);
+  });
+}
+
+// ============================================================
+// Инициализация
+// ============================================================
+function initApp() {
+  console.log('=== APP INIT START ===');
+  console.log('Document ready state:', document.readyState);
+  
+  // Инициализируем cosmos фон
+  if (!cosmosInstance) {
+    cosmosInstance = new CosmosBackground();
+    console.log('Cosmos background initialized');
+  }
+  
+  setupLaunchButton();
+  loadReleases();
+  loadCommits('mcp');
+  
+  console.log('=== APP INIT END ===');
+}
+
+// Запускаем при загрузке DOM
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}
+</script>
+</body>
+</html>

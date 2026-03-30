@@ -2,6 +2,7 @@ use wgpu::*;
 use std::sync::Arc;
 use std::time::Instant;
 use winit::window::Window;
+use crate::rounded_rect_renderer::RoundedRectRenderer;
 
 pub struct Renderer {
     surface: Surface<'static>,
@@ -11,6 +12,7 @@ pub struct Renderer {
     bloom_pipeline: RenderPipeline,
     blur_pipeline: RenderPipeline,
     rect_pipeline: RenderPipeline,
+    rounded_rect_renderer: Option<RoundedRectRenderer>,
     uniform_buffer: Buffer,
     bind_group: BindGroup,
     start_time: Instant,
@@ -238,6 +240,45 @@ impl Renderer {
             multiview: None,
         });
 
+        // Создаём dummy текстуру для rounded rect
+        let texture = device.create_texture(&TextureDescriptor {
+            label: Some("dummy_texture"),
+            size: Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Rgba8UnormSrgb,
+            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        
+        // Заполняем белым цветом
+        queue.write_texture(
+            ImageCopyTexture {
+                texture: &texture,
+                mip_level: 0,
+                origin: Origin3d::ZERO,
+                aspect: TextureAspect::All,
+            },
+            &[255, 255, 255, 255],
+            ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(4),
+                rows_per_image: Some(1),
+            },
+            Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        let rounded_rect_renderer = RoundedRectRenderer::new(&device, &config, &texture);
+
         Self {
             surface,
             device,
@@ -246,6 +287,7 @@ impl Renderer {
             bloom_pipeline,
             blur_pipeline,
             rect_pipeline,
+            rounded_rect_renderer: Some(rounded_rect_renderer),
             uniform_buffer,
             bind_group,
             start_time: Instant::now(),
@@ -303,6 +345,11 @@ impl Renderer {
             // Рисуем rect слой - 4 вертекса
             render_pass.set_pipeline(&self.rect_pipeline);
             render_pass.draw(0..4, 0..1);
+            
+            // Закомментировано - rounded rect заполняет весь экран желтым
+            // if let Some(rounded_rect) = &self.rounded_rect_renderer {
+            //     rounded_rect.render(&mut render_pass);
+            // }
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
