@@ -10,31 +10,45 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     return VertexOutput(vec4<f32>(pos, 0.0, 1.0), uv);
 }
 
-// Простой шум для звезд
-fn hash(p: vec2<f32>) -> f32 {
-    let p3 = fract(vec3<f32>(p.x, p.y, p.x) * 0.13);
-    return fract(p3.x * p3.y * (p3.x + p3.y));
+// Улучшенный шум
+fn hash21(p: vec2<f32>) -> f32 {
+    var p3 = fract(vec3<f32>(p.x, p.y, p.x) * vec3<f32>(0.1031, 0.1030, 0.0973));
+    p3 = p3 + dot(p3, p3.yzx + 19.19);
+    return fract((p3.x + p3.y) * p3.z);
 }
 
 fn stars(uv: vec2<f32>) -> f32 {
-    let grid = floor(uv * 100.0);
-    let frac = fract(uv * 100.0);
+    let cell_size = 50.0;
+    let grid = floor(uv * cell_size);
+    let frac = fract(uv * cell_size);
     
-    var star_brightness = 0.0;
+    var brightness = 0.0;
+    
+    // Проверяем текущую ячейку и соседей
     for (var x: i32 = -1; x <= 1; x = x + 1) {
         for (var y: i32 = -1; y <= 1; y = y + 1) {
             let neighbor = grid + vec2<f32>(f32(x), f32(y));
-            let h = hash(neighbor);
+            let rand = hash21(neighbor);
             
-            if (h > 0.95) {
-                let star_pos = fract(neighbor * 0.1234);
-                let dist = distance(frac, star_pos);
-                let brightness = exp(-dist * dist * 50.0) * (h - 0.95) * 20.0;
-                star_brightness = max(star_brightness, brightness);
+            // Только 10% ячеек имеют звезду
+            if (rand > 0.9) {
+                // Случайная позиция звезды в ячейке
+                let star_x = fract(rand * 12.9898);
+                let star_y = fract(rand * 78.233);
+                let star_pos = vec2<f32>(star_x, star_y);
+                
+                // Расстояние до звезды
+                let offset = frac - (vec2<f32>(f32(x), f32(y)) + star_pos);
+                let dist = length(offset);
+                
+                // Гауссово размытие для мягкого свечения
+                let glow = exp(-dist * dist * 100.0) * 0.5;
+                brightness = max(brightness, glow);
             }
         }
     }
-    return star_brightness;
+    
+    return brightness;
 }
 
 @fragment
@@ -46,7 +60,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     
     // Добавляем звезды
     let star = stars(uv);
-    color = color + vec3<f32>(0.8, 0.7, 1.0) * star;
+    color = color + vec3<f32>(0.9, 0.85, 1.0) * star * 0.8;
     
     return vec4<f32>(color, 1.0);
 }
