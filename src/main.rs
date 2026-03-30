@@ -7,6 +7,7 @@
 mod config;
 mod downloader;
 mod utils;
+mod cosmic_bg;
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -74,6 +75,9 @@ struct AporiaApp {
     config: Config,
     selected_version: McVersion,
     
+    // Космический фон
+    cosmic_bg: cosmic_bg::CosmicBackground,
+    
     // Login screen
     username_input: String,
     login_animation: f32,
@@ -112,6 +116,7 @@ impl Default for AporiaApp {
             state: AppState::Login,
             config: config.clone(),
             selected_version: McVersion::Fabric,
+            cosmic_bg: cosmic_bg::CosmicBackground::new(),
             username_input: config.username.clone(),
             login_animation: 0.0,
             changelog: Vec::new(),
@@ -309,171 +314,380 @@ impl AporiaApp {
     }
     
     /// Главный экран - новый дизайн
-    fn draw_main_content(&mut self, ui: &mut egui::Ui) {
-        // Анимация входа главного меню
-        self.main_animation = (self.main_animation + 0.08).min(1.0);
-        
-        ui.horizontal(|ui| {
-            // Левая панель - версия и коммиты
-            ui.vertical(|ui| {
-                ui.add_space(20.0);
-                
-                // Заголовок
-                ui.label(
-                    egui::RichText::new("Aporia.cc")
-                        .size(32.0)
-                        .strong()
-                        .color(egui::Color32::from_rgb(120, 180, 200))
-                );
-                
-                ui.label(
-                    egui::RichText::new("Aporia - чит клиент, старающийся получиться более открытым и гибким чем остальные")
-                        .size(12.0)
-                        .color(egui::Color32::from_rgb(150, 150, 160))
-                );
-                
-                ui.add_space(30.0);
-                
-                // Версия сверху
-                ui.label(
-                    egui::RichText::new("Version")
-                        .size(14.0)
-                        .strong()
-                        .color(egui::Color32::from_rgb(200, 200, 210))
-                );
-                ui.add_space(8.0);
-                
-                let old_version = self.selected_version.clone();
-                egui::ComboBox::from_label("")
-                    .selected_text(self.selected_version.name())
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.selected_version, McVersion::Fabric, "Fabric 1.21.11 (Modded)");
-                        ui.selectable_value(&mut self.selected_version, McVersion::MCP, "MCP v (last build)");
-                    });
-                
-                // Если версия изменилась, загружаем новые коммиты
-                if old_version != self.selected_version {
-                    self.load_commits();
-                }
-                
-                ui.add_space(30.0);
-                
-                // Коммиты текущей версии
-                ui.label(
-                    egui::RichText::new(format!("Latest commits ({})", self.selected_version.branch()))
-                        .size(14.0)
-                        .strong()
-                        .color(egui::Color32::from_rgb(200, 200, 210))
-                );
-                ui.add_space(10.0);
-                
-                egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
-                    for (i, commit) in self.version_commits.iter().take(10).enumerate() {
-                        ui.label(
-                            egui::RichText::new(format!("{}. {}", i + 1, commit))
-                                .size(11.0)
-                                .color(egui::Color32::from_rgb(180, 180, 190))
-                        );
-                    }
-                    
-                    if self.version_commits.is_empty() {
-                        ui.label(
-                            egui::RichText::new("Loading commits...")
-                                .size(11.0)
-                                .color(egui::Color32::from_rgb(120, 120, 130))
-                        );
-                    }
-                });
-                
-                ui.add_space(40.0);
-                
-                // Кнопка запуска внизу - контрастная
-                let button_text = if self.is_launching {
-                    &self.launch_message
-                } else if self.launch_complete {
-                    "✓ Launched"
-                } else {
-                    "▶ Launch"
-                };
-                
-                let button_color = if self.is_launching {
-                    egui::Color32::from_rgb(80, 80, 100)
-                } else if self.launch_complete {
-                    egui::Color32::from_rgb(100, 140, 120)
-                } else {
-                    egui::Color32::from_rgb(140, 100, 180)
-                };
-                
-                let button = egui::Button::new(
-                    egui::RichText::new(button_text)
-                        .size(18.0)
-                        .color(egui::Color32::from_rgb(255, 255, 255))
-                )
-                .min_size(egui::vec2(280.0, 70.0))
-                .fill(button_color);
-                
-                let response = ui.add(button);
-                
-                if response.clicked() && !self.is_launching {
-                    self.start_launch();
-                }
-                
-                if self.is_launching {
-                    ui.add_space(12.0);
-                    ui.add(egui::ProgressBar::new(self.launch_progress).show_percentage());
-                }
-            });
-            
-            ui.add_space(40.0);
-            
-            // Правая панель - релизы Aporia чита
-            ui.vertical(|ui| {
-                ui.add_space(20.0);
-                ui.label(
-                    egui::RichText::new("Aporia Releases")
-                        .size(16.0)
-                        .strong()
-                        .color(egui::Color32::from_rgb(200, 200, 210))
-                );
-                ui.add_space(12.0);
-                
-                egui::ScrollArea::vertical().max_height(600.0).show(ui, |ui| {
-                    for (idx, entry) in self.changelog.iter().enumerate() {
-                        let is_selected = idx == self.current_changelog_index;
-                        let bg_color = if is_selected {
-                            egui::Color32::from_rgba_unmultiplied(50, 50, 70, 150)
-                        } else {
-                            egui::Color32::from_rgba_unmultiplied(30, 30, 45, 100)
-                        };
-                        
-                        ui.painter().rect_filled(
-                            ui.available_rect_before_wrap(),
-                            5.0,
-                            bg_color,
-                        );
-                        
-                        ui.vertical(|ui| {
-                            ui.label(
-                                egui::RichText::new(&entry.version)
-                                    .strong()
-                                    .color(egui::Color32::from_rgb(120, 180, 200))
-                            );
-                            ui.label(
-                                egui::RichText::new(&entry.date)
-                                    .size(10.0)
-                                    .color(egui::Color32::from_rgb(120, 120, 130))
-                            );
-                        });
-                        
-                        ui.add_space(8.0);
-                        ui.separator();
-                    }
-                });
-            });
+// Временный файл с новой функцией draw_main_content
+// Скопировать в main.rs вместо старой функции
+
+fn draw_main_content(&mut self, ui: &mut egui::Ui) {
+    // Анимация входа главного меню
+    self.main_animation = (self.main_animation + 0.08).min(1.0);
+
+    let screen_rect = ui.max_rect();
+
+    // Отступы от краев
+    let padding = 28.0;
+    let gap = 24.0;
+
+    // Левая панель (flex: 1.1)
+    let left_width = (screen_rect.width() - padding * 2.0 - gap) * 0.55;
+    let right_width = screen_rect.width() - padding * 2.0 - gap - left_width;
+
+    // === ЛЕВАЯ СТЕКЛЯННАЯ ПАНЕЛЬ ===
+    let left_rect = egui::Rect::from_min_size(
+        screen_rect.min + egui::vec2(padding, padding),
+        egui::vec2(left_width, screen_rect.height() - padding * 2.0),
+    );
+
+    Self::draw_glass_frame(ui, left_rect);
+
+    // Контент левой панели
+    let mut left_ui = ui.child_ui(
+        left_rect.shrink(40.0),
+        egui::Layout::top_down(egui::Align::LEFT),
+        None,
+    );
+
+    left_ui.add_space(36.0);
+
+    // Бренд
+    left_ui.horizontal(|ui| {
+        // Иконка бренда
+        let icon_size = 48.0;
+        let icon_rect =
+            egui::Rect::from_min_size(ui.cursor().min, egui::vec2(icon_size, icon_size));
+
+        ui.painter()
+            .rect_filled(icon_rect, 12.0, egui::Color32::from_rgb(139, 92, 246));
+
+        ui.painter().text(
+            icon_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            "A",
+            egui::FontId::proportional(22.0),
+            egui::Color32::WHITE,
+        );
+
+        ui.add_space(icon_size + 14.0);
+
+        ui.label(
+            egui::RichText::new("Aporia")
+                .size(32.0)
+                .strong()
+                .color(egui::Color32::from_rgb(232, 230, 240)),
+        );
+    });
+
+    left_ui.add_space(10.0);
+
+    left_ui.label(
+        egui::RichText::new("Модифицированный клиент с улучшенной производительностью")
+            .size(13.0)
+            .color(egui::Color32::from_rgb(122, 119, 144)),
+    );
+
+    left_ui.add_space(28.0);
+
+    // Версия
+    left_ui.label(
+        egui::RichText::new("VERSION")
+            .size(11.0)
+            .strong()
+            .color(egui::Color32::from_rgb(74, 72, 96)),
+    );
+    left_ui.add_space(8.0);
+
+    let old_version = self.selected_version.clone();
+    egui::ComboBox::from_label("")
+        .selected_text(self.selected_version.name())
+        .width(320.0)
+        .show_ui(&mut left_ui, |ui| {
+            ui.selectable_value(
+                &mut self.selected_version,
+                McVersion::Fabric,
+                "Fabric 1.21.11 (Modded)",
+            );
+            ui.selectable_value(
+                &mut self.selected_version,
+                McVersion::MCP,
+                "MCP v (last build)",
+            );
         });
+
+    if old_version != self.selected_version {
+        self.load_commits();
     }
-    
-    /// Экран настроек
+
+    left_ui.add_space(24.0);
+
+    // Коммиты
+    let branch_upper = self.selected_version.branch().to_uppercase();
+    left_ui.label(
+        egui::RichText::new(format!("LATEST COMMITS ({})", branch_upper))
+            .size(11.0)
+            .strong()
+            .color(egui::Color32::from_rgb(74, 72, 96)),
+    );
+    left_ui.add_space(14.0);
+
+    let commits_clone = self.version_commits.clone();
+    egui::ScrollArea::vertical()
+        .max_height(200.0)
+        .show(&mut left_ui, |ui| {
+            for commit in commits_clone.iter().take(3) {
+                // Парсим хеш и сообщение
+                let parts: Vec<&str> = commit.splitn(2, ' ').collect();
+                let hash = parts.get(0).unwrap_or(&"").to_string();
+                let msg = parts.get(1).unwrap_or(&"").to_string();
+
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new(&hash)
+                            .size(12.0)
+                            .family(egui::FontFamily::Monospace)
+                            .color(egui::Color32::from_rgb(139, 92, 246)),
+                    );
+
+                    ui.add_space(12.0);
+
+                    ui.label(
+                        egui::RichText::new(&msg)
+                            .size(13.0)
+                            .color(egui::Color32::from_rgb(122, 119, 144)),
+                    );
+                });
+
+                ui.add_space(6.0);
+            }
+
+            if commits_clone.is_empty() {
+                ui.label(
+                    egui::RichText::new("Loading commits...")
+                        .size(13.0)
+                        .color(egui::Color32::from_rgb(122, 119, 144)),
+                );
+            }
+        });
+
+    // Кнопка Launch внизу
+    let is_launching = self.is_launching;
+    let launch_complete = self.launch_complete;
+    let launch_message = self.launch_message.clone();
+    let launch_progress = self.launch_progress;
+
+    left_ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+        ui.add_space(20.0);
+
+        let button_text = if is_launching {
+            launch_message.as_str()
+        } else if launch_complete {
+            "✓ Running"
+        } else {
+            "▶ Launch"
+        };
+
+        let button_color = if is_launching {
+            egui::Color32::from_rgb(124, 58, 237)
+        } else if launch_complete {
+            egui::Color32::from_rgb(5, 150, 105)
+        } else {
+            egui::Color32::from_rgb(124, 58, 237)
+        };
+
+        let button = egui::Button::new(
+            egui::RichText::new(button_text)
+                .size(17.0)
+                .strong()
+                .color(egui::Color32::WHITE),
+        )
+        .min_size(egui::vec2(left_width - 80.0, 50.0))
+        .fill(button_color)
+        .rounding(14.0);
+
+        let response = ui.add(button);
+
+        if response.clicked() && !is_launching {
+            self.start_launch();
+            self.cosmic_bg.trigger_flash();
+        }
+
+        if is_launching {
+            ui.add_space(12.0);
+            ui.add(egui::ProgressBar::new(launch_progress).show_percentage());
+        }
+    });
+
+    // === ПРАВАЯ СТЕКЛЯННАЯ ПАНЕЛЬ ===
+    let right_rect = egui::Rect::from_min_size(
+        screen_rect.min + egui::vec2(padding + left_width + gap, padding),
+        egui::vec2(right_width, screen_rect.height() - padding * 2.0),
+    );
+
+    Self::draw_glass_frame(ui, right_rect);
+
+    // Контент правой панели
+    let mut right_ui = ui.child_ui(
+        right_rect.shrink(28.0),
+        egui::Layout::top_down(egui::Align::LEFT),
+        None,
+    );
+
+    right_ui.add_space(36.0);
+
+    right_ui.label(
+        egui::RichText::new("Aporia Releases")
+            .size(18.0)
+            .strong()
+            .color(egui::Color32::from_rgb(232, 230, 240)),
+    );
+
+    right_ui.add_space(6.0);
+
+    right_ui.label(
+        egui::RichText::new("Доступные версии для загрузки")
+            .size(12.0)
+            .color(egui::Color32::from_rgb(74, 72, 96)),
+    );
+
+    right_ui.add_space(20.0);
+
+    let changelog_clone = self.changelog.clone();
+    let current_idx = self.current_changelog_index;
+
+    egui::ScrollArea::vertical()
+        .max_height(screen_rect.height() - 250.0)
+        .show(&mut right_ui, |ui| {
+            for (idx, entry) in changelog_clone.iter().enumerate() {
+                let is_latest = idx == 0;
+
+                let response = ui.add(
+                    egui::Button::new("")
+                        .min_size(egui::vec2(right_width - 64.0, 50.0))
+                        .fill(if is_latest {
+                            egui::Color32::from_rgba_unmultiplied(139, 92, 246, 20)
+                        } else {
+                            egui::Color32::TRANSPARENT
+                        })
+                        .stroke(egui::Stroke::new(
+                            1.0,
+                            if is_latest {
+                                egui::Color32::from_rgba_unmultiplied(139, 92, 246, 50)
+                            } else {
+                                egui::Color32::TRANSPARENT
+                            },
+                        ))
+                        .rounding(12.0),
+                );
+
+                let button_rect = response.rect;
+
+                // Версия слева
+                ui.painter().text(
+                    button_rect.left_center() + egui::vec2(16.0, 0.0),
+                    egui::Align2::LEFT_CENTER,
+                    &entry.version,
+                    egui::FontId::monospace(14.0),
+                    if is_latest {
+                        egui::Color32::from_rgb(167, 139, 250)
+                    } else {
+                        egui::Color32::from_rgb(232, 230, 240)
+                    },
+                );
+
+                // Badge "latest"
+                if is_latest {
+                    let badge_text = "LATEST";
+                    let badge_pos = button_rect.left_center() + egui::vec2(100.0, 0.0);
+
+                    ui.painter().rect_filled(
+                        egui::Rect::from_center_size(badge_pos, egui::vec2(50.0, 18.0)),
+                        6.0,
+                        egui::Color32::from_rgba_unmultiplied(52, 211, 153, 25),
+                    );
+
+                    ui.painter().text(
+                        badge_pos,
+                        egui::Align2::CENTER_CENTER,
+                        badge_text,
+                        egui::FontId::proportional(9.0),
+                        egui::Color32::from_rgb(52, 211, 153),
+                    );
+                }
+
+                // Дата справа
+                ui.painter().text(
+                    button_rect.right_center() - egui::vec2(16.0, 0.0),
+                    egui::Align2::RIGHT_CENTER,
+                    &entry.date,
+                    egui::FontId::monospace(12.0),
+                    egui::Color32::from_rgb(74, 72, 96),
+                );
+
+                if response.clicked() {
+                    self.current_changelog_index = idx;
+                    self.cosmic_bg.trigger_flash();
+                }
+
+                ui.add_space(4.0);
+            }
+        });
+
+    // Статус бар внизу
+    right_ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+        ui.add_space(14.0);
+        ui.separator();
+        ui.add_space(14.0);
+
+        ui.horizontal(|ui| {
+            // Зеленая точка
+            ui.painter().circle_filled(
+                ui.cursor().min + egui::vec2(3.5, 6.0),
+                3.5,
+                egui::Color32::from_rgb(52, 211, 153),
+            );
+
+            ui.add_space(16.0);
+
+            ui.label(
+                egui::RichText::new("Сервисы онлайн — ")
+                    .size(11.0)
+                    .color(egui::Color32::from_rgb(74, 72, 96)),
+            );
+
+            ui.label(
+                egui::RichText::new("пинг 24ms")
+                    .size(11.0)
+                    .color(egui::Color32::from_rgb(122, 119, 144)),
+            );
+        });
+    });
+}
+
+/// Рисует рамку стеклянной панели
+fn draw_glass_frame(ui: &mut egui::Ui, rect: egui::Rect) {
+    let painter = ui.painter();
+
+    // Фон панели с прозрачностью
+    painter.rect_filled(
+        rect,
+        16.0,
+        egui::Color32::from_rgba_unmultiplied(14, 14, 28, 165),
+    );
+
+    // Граница
+    painter.rect_stroke(
+        rect,
+        16.0,
+        egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(140, 90, 255, 30)),
+    );
+
+    // Верхняя линия градиента
+    painter.line_segment(
+        [
+            rect.left_top() + egui::vec2(16.0, 0.0),
+            rect.right_top() - egui::vec2(16.0, 0.0),
+        ],
+        egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(139, 92, 246, 76)),
+    );
+}
     fn draw_settings_content(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             ui.add_space(25.0);
@@ -1391,8 +1605,18 @@ impl eframe::App for AporiaApp {
             }
         }
         
-        // Основной контент
-        egui::CentralPanel::default().show(ctx, |ui| {
+        // Рисуем космический фон на весь экран
+        egui::CentralPanel::default()
+            .frame(egui::Frame::none())
+            .show(ctx, |ui| {
+                let rect = ui.max_rect();
+                self.cosmic_bg.draw(ui, rect);
+            });
+        
+        // Основной контент поверх фона
+        egui::CentralPanel::default()
+            .frame(egui::Frame::none())
+            .show(ctx, |ui| {
             match self.state {
                 AppState::Login => {
                     self.draw_login(ui);

@@ -31,6 +31,7 @@ log = "0.4"
 env_logger = "0.11"
 urlencoding = "2.1"
 zip = { version = "2.4", default-features = false, features = ["deflate"] }
+rand = "0.8"
 
 # GitHub API
 octocrab = "0.38"
