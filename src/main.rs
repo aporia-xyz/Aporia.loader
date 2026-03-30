@@ -729,45 +729,98 @@ fn launch_cheat(config: &Config, tx: &mpsc::Sender<String>) {
 
 /// Обеспечить наличие Java
 fn ensure_java(install_path: &str, tx: &mpsc::Sender<String>) -> String {
-    let _ = tx.send("Checking Java in PATH...".to_string());
+    let _ = tx.send("Checking Java...".to_string());
     
-    log::info!("Checking for Java in system PATH");
+    log::info!("Checking for Java");
     
-    // Пытаемся найти java в PATH
-    match Command::new("java")
-        .arg("-version")
-        .output()
-    {
-        Ok(output) => {
-            if output.status.success() {
-                log::info!("Java found in PATH");
-                let _ = tx.send("Java found".to_string());
-                return "java".to_string();
-            }
-        }
-        Err(e) => {
-            log::warn!("Java not found in PATH: {}", e);
-        }
-    }
-    
-    // Если java не найдена в PATH, пытаемся использовать локальную копию
-    let java_dir = PathBuf::from(install_path).join("java");
+    // Проверяем Java в AppData/apr/jre/
+    let appdata = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
+    let jre_path = appdata.join("apr").join("jre");
     
     #[cfg(target_os = "windows")]
-    let java_exe = java_dir.join("jdk-26").join("bin").join("java.exe");
+    let java_exe = jre_path.join("jdk-26").join("bin").join("java.exe");
     
     #[cfg(not(target_os = "windows"))]
-    let java_exe = java_dir.join("jdk-26").join("bin").join("java");
+    let java_exe = jre_path.join("jdk-26").join("bin").join("java");
     
     if java_exe.exists() {
-        log::info!("Using local Java from: {}", java_exe.display());
-        let _ = tx.send("Using local Java".to_string());
+        log::info!("Using Java from: {}", java_exe.display());
+        let _ = tx.send("Java found".to_string());
         return java_exe.to_string_lossy().to_string();
     }
     
-    log::error!("Java not found in PATH or local installation");
-    let _ = tx.send("Java not found - please install Java".to_string());
+    // Java не найдена, скачиваем
+    log::info!("Java not found, downloading...");
+    let _ = tx.send("Downloading Java 26...".to_string());
+    
+    if let Err(e) = download_and_extract_java(&jre_path, tx) {
+        log::error!("Failed to download Java: {}", e);
+        let _ = tx.send(format!("Failed to download Java: {}", e));
+        return "java".to_string();
+    }
+    
+    if java_exe.exists() {
+        log::info!("Java installed successfully");
+        let _ = tx.send("Java installed".to_string());
+        return java_exe.to_string_lossy().to_string();
+    }
+    
+    log::error!("Java installation failed");
+    let _ = tx.send("Java installation failed".to_string());
     "java".to_string()
+}
+
+/// Скачать и распаковать Java 26
+fn download_and_extract_java(jre_path: &PathBuf, tx: &mpsc::Sender<String>) -> anyhow::Result<()> {
+    let url = "https://download.java.net/java/GA/jdk26/c3cc523845074aa0af4f5e1e1ed4151d/35/GPL/openjdk-26_windows-x64_bin.zip";
+    let zip_path = jre_path.join("openjdk-26.zip");
+    
+    // Создаём директорию
+    fs::create_dir_all(&jre_path)?;
+    
+    log::info!("Downloading Java from: {}", url);
+    let _ = tx.send("PROGRESS:10|Downloading Java...".to_string());
+    
+    // Скачиваем
+    let rt = tokio::runtime::Runtime::new()?;
+    rt.block_on(Downloader::download(url, zip_path.to_str().unwrap()))?;
+    
+    log::info!("Java downloaded, extracting...");
+    let _ = tx.send("PROGRESS:50|Extracting Java...".to_string());
+    
+    // Распаковываем
+    let file = fs::File::open(&zip_path)?;
+    let mut archive = zip::ZipArchive::new(file)?;
+    let total_files = archive.len();
+    
+    for i in 0..total_files {
+        let mut file = archive.by_index(i)?;
+        let outpath = jre_path.join(file.name());
+        
+        if file.name().ends_with('/') {
+            fs::create_dir_all(&outpath)?;
+        } else {
+            if let Some(p) = outpath.parent() {
+                fs::create_dir_all(p)?;
+            }
+            let mut outfile = fs::File::create(&outpath)?;
+            std::io::copy(&mut file, &mut outfile)?;
+        }
+        
+        // Логируем прогресс
+        if i % 100 == 0 {
+            log::info!("Extracted {}/{} files", i, total_files);
+        }
+    }
+    
+    log::info!("Java extracted successfully");
+    let _ = tx.send("PROGRESS:90|Cleaning up...".to_string());
+    
+    // Удаляем архив
+    fs::remove_file(&zip_path)?;
+    
+    log::info!("Java installation complete");
+    Ok(())
 }
 
 /// Загрузить библиотеки из JSON
