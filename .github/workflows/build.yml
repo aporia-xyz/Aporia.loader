@@ -78,6 +78,17 @@ jobs:
     - name: Build
       run: cargo build --release --target ${{ matrix.platform.target }}
       
+    - name: Download Visual C++ Runtime (Windows)
+      if: matrix.platform.os == 'windows-latest'
+      shell: bash
+      run: |
+        mkdir -p vcredist
+        curl -L -o vcredist.exe "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+        7z x vcredist.exe -o"vcredist" "System64/*" || true
+        cp vcredist/System64/vcruntime140.dll target/${{ matrix.platform.target }}/release/ || true
+        cp vcredist/System64/vcruntime140_1.dll target/${{ matrix.platform.target }}/release/ || true
+        cp vcredist/System64/msvcp140.dll target/${{ matrix.platform.target }}/release/ || true
+      
     - name: Rename artifact
       shell: bash
       run: |
@@ -92,7 +103,9 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: aporia-loader-${{ matrix.platform.target }}
-        path: target/${{ matrix.platform.target }}/release/aporia-loader-*
+        path: |
+          target/${{ matrix.platform.target }}/release/aporia-loader-*
+          target/${{ matrix.platform.target }}/release/*.dll
         
   release:
     name: Create Release

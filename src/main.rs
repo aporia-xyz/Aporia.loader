@@ -97,6 +97,11 @@ fn main() -> Result<()> {
                                 Ok(_) => log::info!("Downloaded version {}", version),
                                 Err(e) => log::error!("Failed to download version: {}", e),
                             }
+                            // Download assets after version
+                            match downloader.download_assets(&version).await {
+                                Ok(_) => log::info!("Downloaded assets for version {}", version),
+                                Err(e) => log::error!("Failed to download assets: {}", e),
+                            }
                         });
                     });
                 }
