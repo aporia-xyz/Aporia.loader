@@ -11,6 +11,8 @@ mod github;
 mod downloader;
 mod launcher;
 
+const HTML_CONTENT: &str = include_str!("../index.html");
+
 fn main() -> Result<()> {
     env_logger::init();
 
@@ -20,13 +22,10 @@ fn main() -> Result<()> {
         .with_inner_size(LogicalSize::new(1400.0, 800.0))
         .build(&event_loop)?;
 
-    let html_path = std::env::current_dir()?.join("index.html");
-    let html_content = std::fs::read_to_string(&html_path)?;
-
-    log::info!("HTML loaded, size: {} bytes", html_content.len());
+    log::info!("HTML loaded from embedded resource, size: {} bytes", HTML_CONTENT.len());
 
     let _webview = WebViewBuilder::new()
-        .with_html(html_content)
+        .with_html(HTML_CONTENT)
         .with_devtools(true)
         .with_ipc_handler(|msg| {
             log::info!("IPC Message: {}", msg.body());
