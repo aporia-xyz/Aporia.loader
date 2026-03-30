@@ -1,0 +1,16 @@
+[build]
+[build.env]
+passthrough = [
+    "RUST_BACKTRACE",
+]
+
+[target.x86_64-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main"
+
+[target.x86_64-apple-darwin]
+# macOS targets cannot be cross-compiled from Windows/Linux
+# Use GitHub Actions with macOS runners instead
+
+[target.aarch64-apple-darwin]
+# macOS targets cannot be cross-compiled from Windows/Linux
+# Use GitHub Actions with macOS runners instead

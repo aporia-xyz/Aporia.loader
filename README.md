@@ -18,14 +18,47 @@
 - Rust 1.70+
 - cargo
 
-### Windows/Linux/macOS
+### Локальная сборка
+
+#### Windows
 ```bash
-# Сборка релизной версии
+# Сборка только для Windows
+build.bat
+
+# Или вручную
+cargo build --release
+```
+
+#### Linux/macOS
+```bash
+# Сборка для текущей платформы
 cargo build --release
 
 # Запуск
 cargo run --release
 ```
+
+### Кросс-платформенная сборка
+
+Для сборки под все платформы используйте GitHub Actions:
+1. Запушьте код в GitHub
+2. Создайте тег: `git tag v0.2.0 && git push origin v0.2.0`
+3. GitHub Actions автоматически соберет для Windows, Linux, macOS (x64 и ARM64)
+4. Релиз появится в разделе Releases
+
+#### Локальная кросс-компиляция (Linux из Windows)
+```bash
+# Установите cross и Docker Desktop
+cargo install cross
+
+# Убедитесь что Docker запущен
+docker --version
+
+# Сборка для Linux
+cross build --release --target x86_64-unknown-linux-gnu
+```
+
+**Примечание:** macOS сборки возможны только на macOS хосте или через GitHub Actions.
 
 ## Использование
 
