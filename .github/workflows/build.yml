@@ -98,15 +98,25 @@ jobs:
     name: Create Release
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     
     steps:
+    - uses: actions/checkout@v4
+    
     - name: Download all artifacts
       uses: actions/download-artifact@v4
+      
+    - name: Get commit info
+      id: commit
+      run: |
+        echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        echo "date=$(date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
       
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
+        tag_name: build-${{ steps.commit.outputs.sha_short }}
+        name: Build ${{ steps.commit.outputs.sha_short }} - ${{ steps.commit.outputs.date }}
         files: |
           aporia-loader-*/aporia-loader-*
         draft: false
