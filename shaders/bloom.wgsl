@@ -41,8 +41,8 @@ fn stars(uv: vec2<f32>) -> f32 {
                 let offset = frac - (vec2<f32>(f32(x), f32(y)) + star_pos);
                 let dist = length(offset);
                 
-                // Гауссово размытие для мягкого свечения
-                let glow = exp(-dist * dist * 100.0) * 0.5;
+                // Острое свечение - меньше размытия
+                let glow = exp(-dist * dist * 300.0) * 0.8;
                 brightness = max(brightness, glow);
             }
         }
