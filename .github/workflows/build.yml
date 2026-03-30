@@ -44,11 +44,9 @@ jobs:
     - uses: actions/checkout@v4
     
     - name: Install Rust
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: stable
-        target: ${{ matrix.platform.target }}
-        override: true
+        targets: ${{ matrix.platform.target }}
         
     - name: Install dependencies (Linux)
       if: matrix.platform.os == 'ubuntu-latest'
@@ -57,19 +55,19 @@ jobs:
         sudo apt-get install -y libgtk-3-dev libssl-dev pkg-config
         
     - name: Cache cargo registry
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cargo/registry
         key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
         
     - name: Cache cargo index
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cargo/git
         key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
         
     - name: Cache cargo build
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: target
         key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
@@ -88,7 +86,7 @@ jobs:
         fi
         
     - name: Upload artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: aporia-loader-${{ matrix.platform.target }}
         path: target/${{ matrix.platform.target }}/release/aporia-loader-*
@@ -101,7 +99,7 @@ jobs:
     
     steps:
     - name: Download all artifacts
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       
     - name: Create Release
       uses: softprops/action-gh-release@v1
