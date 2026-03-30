@@ -89,12 +89,19 @@ jobs:
         cp vcredist/System64/vcruntime140_1.dll target/${{ matrix.platform.target }}/release/ || true
         cp vcredist/System64/msvcp140.dll target/${{ matrix.platform.target }}/release/ || true
         
-    - name: Create Windows installer info (Windows)
-      if: matrix.platform.os == 'windows-latest'
+    - name: Create platform-specific README
       shell: bash
       run: |
-        echo "WebView2 Runtime required: https://developer.microsoft.com/en-us/microsoft-edge/webview2/" > target/${{ matrix.platform.target }}/release/README_WINDOWS.txt
-        echo "Visual C++ Runtime included in this package" >> target/${{ matrix.platform.target }}/release/README_WINDOWS.txt
+        if [ "${{ matrix.platform.os }}" = "windows-latest" ]; then
+          echo "WebView2 Runtime required: https://developer.microsoft.com/en-us/microsoft-edge/webview2/" > target/${{ matrix.platform.target }}/release/README.txt
+          echo "Visual C++ Runtime included in this package" >> target/${{ matrix.platform.target }}/release/README.txt
+        elif [ "${{ matrix.platform.os }}" = "ubuntu-latest" ]; then
+          echo "Linux dependencies required:" > target/${{ matrix.platform.target }}/release/README.txt
+          echo "sudo apt-get install libwebkit2gtk-4.1-0 libssl3" >> target/${{ matrix.platform.target }}/release/README.txt
+        elif [ "${{ matrix.platform.os }}" = "macos-latest" ]; then
+          echo "macOS: Xcode Command Line Tools required" > target/${{ matrix.platform.target }}/release/README.txt
+          echo "xcode-select --install" >> target/${{ matrix.platform.target }}/release/README.txt
+        fi
       
     - name: Rename artifact
       shell: bash
@@ -113,7 +120,7 @@ jobs:
         path: |
           target/${{ matrix.platform.target }}/release/aporia-loader-*
           target/${{ matrix.platform.target }}/release/*.dll
-          target/${{ matrix.platform.target }}/release/README_*.txt
+          target/${{ matrix.platform.target }}/release/README.txt
         
   release:
     name: Create Release
