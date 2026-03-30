@@ -781,9 +781,22 @@ fn download_and_extract_java(jre_path: &PathBuf, tx: &mpsc::Sender<String>) -> a
     log::info!("Downloading Java from: {}", url);
     let _ = tx.send("PROGRESS:10|Downloading Java...".to_string());
     
-    // Скачиваем
+    // Скачиваем с прогрессом
     let rt = tokio::runtime::Runtime::new()?;
-    rt.block_on(Downloader::download(url, zip_path.to_str().unwrap()))?;
+    let tx_clone = tx.clone();
+    rt.block_on(async {
+        Downloader::download_with_progress(url, zip_path.to_str().unwrap(), |downloaded, total| {
+            if let Some(total_size) = total {
+                let percent = (downloaded as f64 / total_size as f64 * 40.0) as u64 + 10;
+                let mb_downloaded = downloaded / 1024 / 1024;
+                let mb_total = total_size / 1024 / 1024;
+                let _ = tx_clone.send(format!("PROGRESS:{}|Downloading Java... {} / {} MB", percent, mb_downloaded, mb_total));
+            } else {
+                let mb_downloaded = downloaded / 1024 / 1024;
+                let _ = tx_clone.send(format!("PROGRESS:10|Downloading Java... {} MB", mb_downloaded));
+            }
+        }).await
+    })?;
     
     log::info!("Java downloaded, extracting...");
     let _ = tx.send("PROGRESS:50|Extracting Java...".to_string());
@@ -809,6 +822,8 @@ fn download_and_extract_java(jre_path: &PathBuf, tx: &mpsc::Sender<String>) -> a
         
         // Логируем прогресс
         if i % 100 == 0 {
+            let percent = 50 + (i as f64 / total_files as f64 * 40.0) as u64;
+            let _ = tx.send(format!("PROGRESS:{}|Extracting Java... {}/{} files", percent, i, total_files));
             log::info!("Extracted {}/{} files", i, total_files);
         }
     }

@@ -36,13 +36,25 @@ pub struct Downloader;
 impl Downloader {
     /// Загрузить файл по URL с потоком
     pub async fn download(url: &str, output: &str) -> anyhow::Result<u64> {
+        Self::download_with_progress(url, output, |_, _| {}).await
+    }
+
+    /// Загрузить файл с callback прогресса
+    pub async fn download_with_progress<F>(
+        url: &str,
+        output: &str,
+        mut progress_callback: F,
+    ) -> anyhow::Result<u64>
+    where
+        F: FnMut(u64, Option<u64>),
+    {
         let client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::limited(10))
             .timeout(std::time::Duration::from_secs(600))
             .build()?;
         
         log::info!("Downloading from: {}", url);
-        let mut response = client.get(url).send().await?;
+        let response = client.get(url).send().await?;
         
         log::info!("Response status: {}", response.status());
         
@@ -55,6 +67,9 @@ impl Downloader {
             ));
         }
         
+        // Получаем размер файла
+        let total_size = response.content_length();
+        
         // Создаём директорию
         if let Some(parent) = std::path::Path::new(output).parent() {
             std::fs::create_dir_all(parent)?;
@@ -64,18 +79,26 @@ impl Downloader {
         let mut file = tokio::fs::File::create(output).await?;
         
         let mut total_downloaded = 0u64;
+        let mut stream = response.bytes_stream();
         
-        log::info!("Starting streaming download");
-        while let Ok(Some(chunk)) = response.chunk().await {
+        log::info!("Starting streaming download (total: {:?} bytes)", total_size);
+        
+        use futures::StreamExt;
+        use tokio::io::AsyncWriteExt;
+        
+        while let Some(chunk_result) = stream.next().await {
+            let chunk = chunk_result?;
             total_downloaded += chunk.len() as u64;
             
-            // Логируем прогресс каждые 50MB
-            if total_downloaded % (50 * 1024 * 1024) == 0 {
+            file.write_all(&chunk).await?;
+            
+            // Вызываем callback прогресса
+            progress_callback(total_downloaded, total_size);
+            
+            // Логируем прогресс каждые 10MB
+            if total_downloaded % (10 * 1024 * 1024) < chunk.len() as u64 {
                 log::info!("Downloaded: {} MB", total_downloaded / 1024 / 1024);
             }
-            
-            use tokio::io::AsyncWriteExt;
-            file.write_all(&chunk).await?;
         }
         
         log::info!("Download complete: {} bytes", total_downloaded);
